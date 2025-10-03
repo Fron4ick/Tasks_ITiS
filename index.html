@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TOP_SHTATS — Анализ выручки по штатам (Top 10)</title>
 
-  <!-- Опционально: шрифт (если нет интернета, браузер подставит системный) -->
+  <!-- Шрифт -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
   <!-- PapaParse (CSV parser) -->
@@ -124,6 +124,10 @@
       border:1px solid rgba(255,255,255,0.04);
       box-shadow:none;
     }
+    .btn:disabled{
+      opacity:0.45;
+      cursor:not-allowed;
+    }
 
     main.card {
       background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
@@ -185,24 +189,10 @@
       background:var(--table-row-even);
     }
 
-    .col-idx{
-      width:56px;
-      color:var(--muted);
-    }
-    .col-state{
-      width:40%;
-      font-weight:600;
-      color:#fff;
-    }
-    .col-count{
-      text-align:center;
-      color:var(--muted);
-    }
-    .col-sales{
-      text-align:right;
-      font-weight:700;
-      color:var(--accent-2);
-    }
+    .col-idx{ width:56px; color:var(--muted); }
+    .col-state{ width:40%; font-weight:600; color:#fff; }
+    .col-count{ text-align:center; color:var(--muted); }
+    .col-sales{ text-align:right; font-weight:700; color:var(--accent-2); }
 
     .summary {
       margin-top:12px;
@@ -216,52 +206,81 @@
       border:1px solid rgba(255,255,255,0.02);
       flex-wrap:wrap;
     }
-    .summary .left{
-      color:var(--muted);
-      font-size:14px;
-    }
-    .summary .total{
-      font-size:18px;
-      font-weight:700;
-      color:#ffffff;
-    }
-
-    .summary .top10{
-      text-align:right;
-      min-width:220px;
-    }
+    .summary .left{ color:var(--muted); font-size:14px; }
+    .summary .total{ font-size:18px; font-weight:700; color:#ffffff; }
+    .summary .top10{ text-align:right; min-width:220px; }
     .summary .top10 .label { color:var(--muted); font-size:13px; }
     .summary .top10 .value { font-weight:700; font-size:16px; color:var(--accent-2); }
+    .small-muted{ color:var(--muted); font-size:13px; }
+    .empty-block{ text-align:center; padding:60px 16px; color:var(--muted); border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005)); border:1px dashed rgba(255,255,255,0.03); }
 
-    .small-muted{
-      color:var(--muted);
-      font-size:13px;
-    }
-
-    .empty-block{
-      text-align:center;
-      padding:28px 16px;
-      color:var(--muted);
-      border-radius:10px;
-      background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
-      border:1px dashed rgba(255,255,255,0.03);
-    }
-
-    .file-input {
-      margin-top:12px;
-      display:flex;
-      gap:10px;
+    /* Модалка */
+    .modal-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,20,0.7);
+      display:none;
       align-items:center;
       justify-content:center;
-      flex-wrap:wrap;
+      z-index:9999;
+      padding:20px;
     }
-    .drop-area{
-      margin-top:12px;
-      padding:18px;
-      border-radius:10px;
-      border:1px dashed rgba(255,255,255,0.06);
-      background: rgba(255,255,255,0.01);
+    .modal{
+      width:100%;
+      max-width:1200px;
+      height:80vh;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 30px 70px rgba(2,6,20,0.7);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      position:relative;
+    }
+    .modal header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:14px 16px;
+      border-bottom:1px solid rgba(255,255,255,0.03);
+    }
+    .modal header h3{ margin:0; font-size:16px; color:#fff; }
+    .modal header .muted{ color:var(--muted); font-size:13px; }
+    .modal .modal-body{
+      padding:12px;
+      overflow:auto;
+      height:100%;
+    }
+    .modal .close-btn{
+      background:transparent;
       color:var(--muted);
+      border:1px solid rgba(255,255,255,0.03);
+      padding:6px 10px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    .modal table.modal-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+      color:#e9f6ff;
+    }
+    .modal table.modal-table thead th{
+      position:sticky;
+      top:0;
+      background:rgba(8,14,20,0.85);
+      padding:10px;
+      text-align:left;
+      z-index:5;
+      border-bottom:1px solid rgba(255,255,255,0.04);
+    }
+    .modal table.modal-table td{
+      padding:8px 10px;
+      border-bottom:1px solid rgba(255,255,255,0.02);
+      vertical-align:top;
+      max-width:300px;
+      word-break:break-word;
     }
 
     @media (max-width:800px){
@@ -270,6 +289,7 @@
       table.report { font-size:13px; min-width:640px; }
       .summary { flex-direction:column; align-items:flex-start; }
       .summary .top10 { text-align:left; min-width:unset; }
+      .modal{ height:90vh; max-width:100%; }
     }
   </style>
 </head>
@@ -289,6 +309,11 @@
           <span class="small-muted">Выберите год:</span>
           <select id="yearSelect"><option value="">— Год —</option></select>
         </div>
+
+        <!-- Кнопка просмотра CSV (использует уже загруженный rawData) -->
+        <div class="control-card">
+          <button class="btn" id="btnOpenCsv" disabled>Просмотреть CSV</button>
+        </div>
       </div>
     </header>
 
@@ -296,25 +321,14 @@
       <div class="panel-top">
         <div>
           <h2 style="margin:0 0 6px 0;">Анализ выручки по штатам (Top 10)</h2>
+          <div class="small-muted">Файл: <code>orders_customers.csv</code> (автозагрузка из той же папки)</div>
         </div>
         <div class="small-muted" id="statusInfo">Попытка автозагрузки CSV...</div>
       </div>
 
       <div id="contentArea">
-        <div class="empty-block" id="emptyMessage" aria-live="polite">
-          <div id="emptyText">
-            Идёт попытка загрузить <code>orders_customers.csv</code> автоматически... Если страница открыта локально без сервера, автозагрузка может быть запрещена браузером.
-          </div>
-
-          <div class="file-input" style="width:100%; justify-content:center;">
-            <label class="btn" for="fileInputBtn" style="cursor:pointer;">Выбрать CSV-файл</label>
-            <input id="fileInputBtn" type="file" accept=".csv,text/csv" style="display:none;">
-            <button id="showExampleBtn" class="btn ghost">Показать подсказку по формату</button>
-          </div>
-
-          <div class="drop-area" id="dropArea">
-            Перетащите CSV-файл сюда или нажмите "Выбрать CSV-файл". Файл должен содержать колонки с названием штата (state, State) и датой заказа (order_date, OrderDate или похожее), а также продажами (sales, Sales).
-          </div>
+        <div class="empty-block" id="emptyMessage">
+          Идёт попытка загрузить <code>orders_customers.csv</code>... Если страница открыта без сервера, автозагрузка может быть запрещена. Запустите локальный http-сервер или положите CSV рядом и откройте страницу через сервер.
         </div>
 
         <div id="tableArea" style="display:none;">
@@ -329,7 +343,6 @@
                 </tr>
               </thead>
               <tbody id="reportBody">
-                <!-- rows injected by JS -->
               </tbody>
             </table>
           </div>
@@ -337,6 +350,7 @@
           <div class="summary" role="status">
             <div class="left">
               <div class="small-muted">Показано Top <span id="shownCount">0</span> штатов</div>
+              <div class="small-muted">Источник: <code>orders_customers.csv</code></div>
             </div>
 
             <div class="top10">
@@ -357,6 +371,27 @@
     </main>
   </div>
 
+  <!-- Модальное окно просмотра CSV -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header>
+        <div>
+          <h3 id="modalTitle">Полный CSV — orders_customers.csv</h3>
+          <div class="muted" id="modalSub">Строк: 0</div>
+        </div>
+        <div>
+          <button class="close-btn" id="modalClose">Закрыть</button>
+        </div>
+      </header>
+      <div class="modal-body" id="modalBody">
+        <!-- таблица будет вставлена сюда -->
+        <div id="modalTableContainer" style="min-height:80px; color:var(--muted);">
+          Загрузка данных...
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Глобальные
     let rawData = [];
@@ -370,11 +405,13 @@
     const shownCountEl = document.getElementById('shownCount');
     const top10RevenueEl = document.getElementById('top10Revenue');
     const top10ShareEl = document.getElementById('top10Share');
+    const btnOpenCsv = document.getElementById('btnOpenCsv');
 
-    const fileInputBtn = document.getElementById('fileInputBtn');
-    const dropArea = document.getElementById('dropArea');
-    const showExampleBtn = document.getElementById('showExampleBtn');
-    const emptyText = document.getElementById('emptyText');
+    // Модалка
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalCloseBtn = document.getElementById('modalClose');
+    const modalTableContainer = document.getElementById('modalTableContainer');
+    const modalSub = document.getElementById('modalSub');
 
     const usdFormatter = new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -382,7 +419,7 @@
       maximumFractionDigits: 2
     });
 
-    // Попытка автозагрузки при старте (если страница запущена через http(s))
+    // Попытка автозагрузки при старте
     (async function tryAutoLoad() {
       const candidates = ['orders_customers.csv', 'data/orders_customers.csv'];
       let loaded = false;
@@ -390,134 +427,41 @@
         try {
           statusInfo.textContent = `Пытаюсь загрузить ${path} ...`;
           const resp = await fetch(path);
-          if (!resp.ok) {
-            // попробуем следующий
-            continue;
-          }
+          if (!resp.ok) continue;
           const text = await resp.text();
           parseCSVText(text);
           loaded = true;
           break;
         } catch (err) {
-          // Ошибка — чаще всего из-за CORS/file:// или отсутствия сервера
           console.warn('fetch error for', path, err);
           continue;
         }
       }
       if (!loaded){
-        statusInfo.textContent = 'Не удалось автозагрузить CSV. Выберите файл вручную или перетащите его.';
-        // показать область выбора файла (она уже видима в emptyMessage)
+        statusInfo.textContent = 'Не удалось автозагрузить CSV. Запустите локальный сервер или поместите файл рядом.';
       }
     })();
 
-    // Обработка выбора файла пользователем
-    fileInputBtn.addEventListener('change', (e)=>{
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      statusInfo.textContent = `Загружаю выбранный файл: ${f.name} ...`;
-      // Используем Papa.parse напрямую с файлом (он умеет читать File)
-      if (window.Papa && Papa.parse) {
-        Papa.parse(f, {
-          header: true,
-          skipEmptyLines: true,
-          complete: function(results){
-            rawData = results.data;
-            postProcessData();
-          },
-          error: function(err){
-            console.error('PapaParse error', err);
-            statusInfo.textContent = 'Ошибка парсинга CSV';
-          }
-        });
-      } else {
-        // Небольшой fallback: прочитать через FileReader и parse текстом
-        const reader = new FileReader();
-        reader.onload = function(ev){
-          parseCSVText(ev.target.result);
-        };
-        reader.onerror = function(){
-          statusInfo.textContent = 'Ошибка чтения файла';
-        };
-        reader.readAsText(f, 'utf-8');
-      }
-    });
-
-    // Drag and drop
-    ;['dragenter','dragover','dragleave','drop'].forEach(evt=>{
-      dropArea.addEventListener(evt, (e)=>e.preventDefault());
-    });
-    dropArea.addEventListener('dragover', ()=>{ dropArea.style.borderColor = 'rgba(123,227,255,0.6)'; });
-    dropArea.addEventListener('dragleave', ()=>{ dropArea.style.borderColor = ''; });
-    dropArea.addEventListener('drop', (e)=>{
-      dropArea.style.borderColor = '';
-      const f = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!f) return;
-      statusInfo.textContent = `Загружаю перетянутый файл: ${f.name} ...`;
-      if (window.Papa && Papa.parse) {
-        Papa.parse(f, {
-          header: true,
-          skipEmptyLines: true,
-          complete: function(results){
-            rawData = results.data;
-            postProcessData();
-          },
-          error: function(err){
-            console.error('PapaParse error', err);
-            statusInfo.textContent = 'Ошибка парсинга CSV';
-          }
-        });
-      } else {
-        const reader = new FileReader();
-        reader.onload = function(ev){
-          parseCSVText(ev.target.result);
-        };
-        reader.readAsText(f, 'utf-8');
-      }
-    });
-
-    showExampleBtn.addEventListener('click', ()=>{
-      alert('Пример колонок в CSV:\n\nstate,order_date,sales\nCalifornia,2020-01-05,123.45\nTexas,2020-02-12,234.00\n\nДопустимы имена колонок: state / State; order_date / OrderDate / \"order date\"; sales / Sales.');
-    });
-
     // Парсинг текста
     function parseCSVText(text){
-      if (window.Papa && Papa.parse) {
-        Papa.parse(text, {
-          header: true,
-          dynamicTyping: false,
-          skipEmptyLines: true,
-          complete: function(results){
-            rawData = results.data;
-            postProcessData();
-          },
-          error: function(err){
-            console.error('PapaParse error', err);
-            statusInfo.textContent = 'Ошибка парсинга CSV';
-          }
-        });
-      } else {
-        // Простой разбор CSV (очень грубый) — на случай отсутствия Papa
-        try {
-          const lines = text.split(/\r?\n/).filter(Boolean);
-          if (lines.length < 2) { statusInfo.textContent = 'CSV слишком маленький.'; return; }
-          const headers = lines[0].split(',');
-          const data = [];
-          for (let i=1;i<lines.length;i++){
-            const cols = lines[i].split(',');
-            const obj = {};
-            for (let j=0;j<headers.length;j++) obj[headers[j].trim()] = (cols[j]||'').trim();
-            data.push(obj);
-          }
-          rawData = data;
+      Papa.parse(text, {
+        header: true,
+        dynamicTyping: false,
+        skipEmptyLines: true,
+        complete: function(results){
+          rawData = results.data;
           postProcessData();
-        } catch (e) {
-          console.error(e);
-          statusInfo.textContent = 'Не удалось распарсить CSV без PapaParse.';
+          // Активируем кнопку просмотра CSV (использует rawData)
+          btnOpenCsv.disabled = false;
+        },
+        error: function(err){
+          console.error('PapaParse error', err);
+          statusInfo.textContent = 'Ошибка парсинга CSV';
         }
-      }
+      });
     }
 
-    // Обработка данных
+    // Обработка данных для агрегации
     function postProcessData(){
       aggregatedByYear = {};
       const yearsSet = new Set();
@@ -525,42 +469,38 @@
 
       for (const row of rawData){
         if (!row) continue;
-        let state = (row.state ?? row.State ?? row['State '] ?? row['state '] ?? '').toString().trim();
-        let dateStr = (row.order_date ?? row.OrderDate ?? row['order date'] ?? row['Order Date'] ?? '').toString().trim();
+        let state = (row.state ?? row.State ?? '').toString().trim();
+        let dateStr = (row.order_date ?? row.OrderDate ?? row['order date'] ?? '').toString().trim();
         let salesRaw = (row.sales ?? row.Sales ?? '0').toString().trim();
         if (!state) continue;
         let year = null;
         if (dateStr){
-          // Попробуем создать Date. Если не получилось — попробуем вытащить год парсингом.
           const d = new Date(dateStr);
           if (!isNaN(d)) year = d.getFullYear();
           else {
-            const parts = dateStr.split(/[-\/\.]/).map(p=>p.trim());
-            // ищем часть с 4 цифрами
-            for (const p of parts){
-              const y = parseInt(p,10);
-              if (!isNaN(y) && y>1900 && y<2100) { year = y; break; }
-            }
-            // если первая часть — YYYY
-            if (year === null && parts.length>0){
-              const y0 = parseInt(parts[0],10);
-              if (!isNaN(y0) && y0>1900 && y0<2100) year = y0;
+            const parts = dateStr.split(/[-\/\.]/);
+            if (parts.length >= 1) {
+              const y = parseInt(parts[0],10);
+              if (!isNaN(y) && y>1900 && y<2100) year = y;
+              else {
+                const last = parseInt(parts[2],10);
+                if (!isNaN(last) && last>1900 && last<2100) year = last;
+              }
             }
           }
         }
         if (year === null) continue;
-        const salesNum = parseFloat(salesRaw.replace(/[^\d\.\-]/g,'')) || 0;
+        const salesNum = parseFloat(salesRaw.replace(/[^\d\.\-]/g,''));
         if (isNaN(salesNum)) continue;
         normalized.push({ state, year, sales: salesNum });
         yearsSet.add(year);
       }
 
       if (normalized.length === 0){
-        statusInfo.textContent = 'После парсинга не найдено валидных записей. Проверьте формат CSV (колонки state, order_date, sales).';
+        statusInfo.textContent = 'После парсинга не найдено валидных записей.';
         return;
       }
 
-      // Группировать
       const byYear = {};
       for (const r of normalized){
         byYear[r.year] = byYear[r.year] || {};
@@ -574,7 +514,7 @@
         aggregatedByYear[y] = arr;
       }
 
-      // Заполнить селектор годов и выбрать последний
+      // Заполним селектор годов
       const years = Array.from(yearsSet).sort((a,b)=>a-b);
       populateYearSelect(years);
       statusInfo.textContent = `CSV загружен — обработано ${normalized.length} строк; годы: ${years.join(', ')}`;
@@ -624,10 +564,8 @@
         reportBody.appendChild(tr);
       }
 
-      // Общая выручка за год (по всем штатам)
       let total = 0;
       for (const item of data) total += item.sales;
-      // Сумма Top10
       let topSum = 0;
       for (const item of top) topSum += item.sales;
       const share = total === 0 ? 0 : (topSum / total) * 100;
@@ -642,19 +580,97 @@
     function showEmpty(msg){
       tableArea.style.display = 'none';
       emptyMessage.style.display = 'block';
-      emptyText.textContent = msg || 'Нет данных для отображения.';
+      emptyMessage.textContent = msg || 'Нет данных для отображения.';
     }
 
     function roundToTwo(v){ return Math.round((v+Number.EPSILON)*100)/100; }
     function escapeHtml(s){
-      return s.replace(/[&<>"']/g, function(m){
+      return s.toString().replace(/[&<>"']/g, function(m){
         return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
       });
     }
 
-    // Полезная подсказка: если страница открыта через file:// и вы хотите автозагрузку — запустите локальный сервер, например:
-    // Python 3: `python -m http.server 8000` в папке с файлом, затем откройте http://localhost:8000/
-    // Но это не обязательно: выбор файла вручную работает без сервера.
+    // ========== МОДАЛКА: работа с уже загруженным rawData ==========
+    btnOpenCsv.addEventListener('click', openCsvModal);
+    modalCloseBtn.addEventListener('click', closeCsvModal);
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) closeCsvModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalBackdrop.style.display === 'flex') closeCsvModal();
+    });
+
+    function openCsvModal(){
+      if (!rawData || rawData.length === 0){
+        alert('Данные CSV ещё не загружены.');
+        return;
+      }
+      // Построить таблицу внутри модалки
+      buildModalTable(rawData);
+      modalSub.textContent = `Строк: ${rawData.length}`;
+      modalBackdrop.style.display = 'flex';
+      modalBackdrop.setAttribute('aria-hidden','false');
+      // Заблокировать скролл страницы
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCsvModal(){
+      modalBackdrop.style.display = 'none';
+      modalBackdrop.setAttribute('aria-hidden','true');
+      // Снять блокировку скролла
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      // Очистить контейнер (необязательно)
+      // modalTableContainer.innerHTML = '';
+    }
+
+    function buildModalTable(data){
+      // Определим заголовки, сохраняя желаемый порядок если есть
+      const defaultOrder = ['name','segment','state','city','order_date','ship_mode','sales'];
+      const firstRow = data.find(r => r && Object.keys(r).length>0);
+      if (!firstRow){
+        modalTableContainer.innerHTML = '<div class="small-muted">Нет данных для показа.</div>';
+        return;
+      }
+      const keys = Object.keys(firstRow);
+      // Сортируем ключи: сначала дефолтные в порядке defaultOrder, затем остальные
+      const orderedKeys = [];
+      for (const k of defaultOrder) if (keys.includes(k)) orderedKeys.push(k);
+      for (const k of keys) if (!orderedKeys.includes(k)) orderedKeys.push(k);
+
+      // Создадим таблицу
+      let html = '<div style="overflow:auto;"><table class="modal-table"><thead><tr>';
+      for (const k of orderedKeys){
+        html += `<th>${escapeHtml(k)}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+      // Добавляем строки — для экономии памяти можно ограничить вывод, но пользователь просил показывать таблицу из загруженного файла (без доп.подгрузки)
+      for (let i=0;i<data.length;i++){
+        const row = data[i];
+        // Пропускаем полностью пустые строки
+        if (!row || Object.keys(row).length === 0) continue;
+        html += '<tr>';
+        for (const k of orderedKeys){
+          const cell = row[k] ?? row[k.toLowerCase()] ?? '';
+          html += `<td>${escapeHtml(cell)}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table></div>';
+      modalTableContainer.innerHTML = html;
+
+      // Немного прокрутки кверху
+      modalTableContainer.scrollTop = 0;
+    }
+
+    // Помогает включить кнопку просмотра, если rawData уже загружен ранее
+    // (в parseCSVText мы её включаем сразу, но добавим проверку)
+    (function ensureButtonState(){
+      if (rawData && rawData.length>0) btnOpenCsv.disabled = false;
+      else btnOpenCsv.disabled = true;
+    })();
+
   </script>
 </body>
 </html>

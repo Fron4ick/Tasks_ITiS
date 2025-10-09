@@ -50,7 +50,7 @@
         </label>
         <input id="fileInput" type="file" accept=".csv" />
         <button id="btnAnalyze" class="btn">Анализировать</button>
-        <button id="btnTrySample" class="btn">Попробовать data/orders_invalid_fields3.csv</button>
+        <button id="btnTrySample" class="btn">Попробовать orders_invalid_fields3</button>
       </div>
     </header>
 
@@ -101,7 +101,7 @@ document.getElementById('modalClose').addEventListener('click', closeModal);
 
 btnTrySample.addEventListener('click', async () => {
   // Попытка загрузить файл как в вашем образце (data/orders_invalid_fields3.csv)
-  await tryFetch('orders_invalid_fields3.csv');
+  await tryFetch('test-data1/orders_invalid_fields3.csv');
 });
 
 btnAnalyze.addEventListener('click', () => {

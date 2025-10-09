@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CSV Validator — Обработка некорректных данных</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    :root{ --bg:#0f1720; --muted:#a9b2bf; --accent:#4aa3ff; --panel:#0b1220; font-family:Inter,system-ui,Arial; color:#eaf4ff;}
+    body{ margin:0; background:linear-gradient(180deg,#07101a,#0f1720); min-height:100vh; }
+    .wrap{ max-width:1100px; margin:28px auto; padding:20px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;}
+    h1{ margin:0; font-size:20px;}
+    .controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .card{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.03);}
+    input[type=file]{ color:var(--muted); }
+    .btn{ background:linear-gradient(90deg,var(--accent),#7be3ff); color:#071024; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600;}
+    .muted{ color:var(--muted); font-size:13px;}
+    .results{ margin-top:12px; display:grid; gap:10px;}
+    pre{ white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,0.02); padding:12px; border-radius:8px; }
+    table{ width:100%; border-collapse:collapse; font-size:13px; color:#eaf4ff; }
+    table th,table td{ padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.03); text-align:left; }
+    .badge{ display:inline-block; padding:6px 8px; border-radius:8px; background:rgba(255,255,255,0.02); color:var(--muted); font-weight:600; }
+    .status-ok{ color:#7ee787; }
+    .status-warn{ color:#ffd166; }
+    .status-err{ color:#ff7b7b; }
+    .modal-backdrop{ position:fixed; inset:0; display:none; background:rgba(2,6,20,0.7); align-items:center; justify-content:center; z-index:9999; padding:20px;}
+    .modal{ width:100%; max-width:1100px; height:80vh; background:var(--panel); border-radius:10px; padding:12px; overflow:auto; border:1px solid rgba(255,255,255,0.03);}
+    .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>CSV Validator — Обработка некорректных данных</h1>
+        <div class="muted">Реализация: проверка структуры и качества данных (по ТЗ Task1.2)</div>
+      </div>
+      <div class="controls">
+        <label class="badge">Тестовый набор:
+          <select id="testSet">
+            <option value="auto">Авто (анализируем файл)</option>
+            <option value="test-data1">Test-data1 (структура)</option>
+            <option value="test-data2">Test-data2 (значения)</option>
+          </select>
+        </label>
+        <input id="fileInput" type="file" accept=".csv" />
+        <button id="btnAnalyze" class="btn">Анализировать</button>
+        <button id="btnTrySample" class="btn">Попробовать data/orders_invalid_fields3.csv</button>
+      </div>
+    </header>
+
+    <main class="card">
+      <div class="row">
+        <div style="flex:1;">
+          <div class="muted">Обязательные поля: <span class="mono">name, segment, state, city, order_date, ship_mode, sales</span></div>
+          <div class="muted" style="margin-top:6px;">Загрузите CSV или используйте кнопку автозагрузки (если файл лежит в папке data/ рядом со страницей).</div>
+        </div>
+        <div style="min-width:260px; text-align:right;">
+          <div id="status" class="muted">Статус: ожидание</div>
+        </div>
+      </div>
+
+      <div class="results" id="resultsArea">
+        <div id="summary" style="display:none;"></div>
+        <div id="structure" style="display:none;"></div>
+        <div id="dataIssues" style="display:none;"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div><strong id="modalTitle">CSV — просмотр</strong><div class="muted" id="modalSub">строк: 0</div></div>
+        <div><button class="btn" id="modalClose">Закрыть</button></div>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+<script>
+const requiredFields = ['name','segment','state','city','order_date','ship_mode','sales'];
+const statusEl = document.getElementById('status');
+const summaryEl = document.getElementById('summary');
+const structureEl = document.getElementById('structure');
+const dataIssuesEl = document.getElementById('dataIssues');
+const resultsArea = document.getElementById('resultsArea');
+const fileInput = document.getElementById('fileInput');
+const btnAnalyze = document.getElementById('btnAnalyze');
+const btnTrySample = document.getElementById('btnTrySample');
+const testSet = document.getElementById('testSet');
+const modalBackdrop = document.getElementById('modalBackdrop');
+const modalBody = document.getElementById('modalBody');
+const modalSub = document.getElementById('modalSub');
+document.getElementById('modalClose').addEventListener('click', closeModal);
+
+btnTrySample.addEventListener('click', async () => {
+  // Попытка загрузить файл как в вашем образце (data/orders_invalid_fields3.csv)
+  await tryFetch('orders_invalid_fields3.csv');
+});
+
+btnAnalyze.addEventListener('click', () => {
+  if (fileInput.files.length === 0){
+    alert('Выберите CSV файл через поле "Выбрать файл" или нажмите кнопку автозагрузки.');
+    return;
+  }
+  const f = fileInput.files[0];
+  readFileAndAnalyze(f);
+});
+
+async function tryFetch(path){
+  status('Пытаюсь загрузить ' + path + ' ...');
+  try {
+    const resp = await fetch(path);
+    if (!resp.ok) throw new Error('fetch failed');
+    const text = await resp.text();
+    parseAndAnalyze(text, path);
+  } catch (err){
+    status('Не удалось автозагрузить файл. Возможны ограничения загрузки через file:// — запустите локальный сервер.');
+    alert('Автозагрузка не удалась. Положите файл рядом и используйте выбор файла или запустите локальный сервер.');
+  }
+}
+
+function readFileAndAnalyze(file){
+  status('Чтение файла ' + file.name + ' ...');
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    parseAndAnalyze(ev.target.result, file.name);
+  };
+  reader.onerror = (e) => {
+    status('Ошибка чтения файла.');
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function status(text){
+  statusEl.textContent = 'Статус: ' + text;
+}
+
+function parseAndAnalyze(csvText, filename){
+  status('Парсинг CSV ...');
+  Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: false,
+    complete: function(results){
+      const data = results.data;
+      runChecks(data, filename, results.meta);
+    },
+    error: function(err){
+      status('Ошибка парсинга CSV: ' + err.message);
+    }
+  });
+}
+
+function runChecks(data, filename, meta){
+  // data: array of objects
+  resultsArea.style.display = 'block';
+  summaryEl.style.display = 'block';
+  structureEl.style.display = 'block';
+  dataIssuesEl.style.display = 'block';
+
+  // 1) Summary
+  const nRows = data.length;
+  const nCols = meta && meta.fields ? meta.fields.length : (nRows>0?Object.keys(data[0]).length:0);
+  summaryEl.innerHTML = `<div class="card"><strong>Файл:</strong> <span class="mono">${filename}</span> — <span class="muted">${nRows} строк, ${nCols} колонок</span></div>`;
+
+  // 2) Structure checks
+  const header = meta && meta.fields ? meta.fields.map(h=>h.toString().trim()) : (nRows>0?Object.keys(data[0]):[]);
+  const headerNorm = header.map(h=>h.toLowerCase());
+  const present = {};
+  requiredFields.forEach(f => present[f] = headerNorm.includes(f));
+  const missing = requiredFields.filter(f => !present[f]);
+  const extra = header.filter(h => !requiredFields.includes(h.toLowerCase()));
+
+  // поиск похожих полей при опечатках
+  const similar = {};
+  if (missing.length > 0){
+    missing.forEach(m => {
+      similar[m] = findSimilar(m, headerNorm);
+    });
+  }
+
+  let structHtml = '<div class="card"><h3>Проверка структуры</h3>';
+  structHtml += `<div class="muted"><strong>Заголовки:</strong> <span class="mono">${escapeHtml(header.join(', '))}</span></div>`;
+  if (nRows === 0){
+    structHtml += `<p class="status-err"><strong>Файл пустой (orders_empty.csv)</strong></p>`;
+  } else {
+    if (nRows > 0 && header.length>0 && data.every(r => Object.keys(r).length === 0)){
+      structHtml += `<p class="status-err"><strong>В файле есть только заголовки, но нет записей (orders_no_entries.csv)</strong></p>`;
+    }
+  }
+  if (missing.length > 0){
+    structHtml += `<p class="status-err"><strong>Отсутствуют обязательные поля:</strong> ${missing.join(', ')}</p>`;
+    if (Object.keys(similar).length > 0){
+      structHtml += `<div class="muted">Похожие имена колонок (возможная опечатка):<ul>`;
+      for (const k in similar){
+        structHtml += `<li>${k} → ${similar[k].length ? similar[k].join(', ') : '<em>не найдено похожих</em>'}</li>`;
+      }
+      structHtml += '</ul></div>';
+    }
+  } else {
+    structHtml += `<p class="status-ok"><strong>Все обязательные поля присутствуют.</strong></p>`;
+  }
+  if (extra.length>0){
+    structHtml += `<div class="muted"><strong>Дополнительные поля (необязательные):</strong> ${escapeHtml(extra.join(', '))}</div>`;
+  }
+  structHtml += '</div>';
+  structureEl.innerHTML = structHtml;
+
+  // Если структуры нет — останавливаем дальше по test-data1. Но если testSet == test-data2 или auto, продолжаем анализ значений где это возможно.
+  // 3) Data quality checks
+  const rowsWithMissing = {};
+  let anyMissingRows = 0;
+  requiredFields.forEach(f => {
+    if (headerNorm.includes(f)){
+      let cnt = 0;
+      for (const r of data){
+        const val = r[f] ?? r[f.toLowerCase()];
+        if (val === undefined || val === null || val.toString().trim() === '') cnt++;
+      }
+      rowsWithMissing[f] = cnt;
+    } else {
+      rowsWithMissing[f] = null;
+    }
+  });
+  anyMissingRows = requiredFields.some(f => rowsWithMissing[f] && rowsWithMissing[f] > 0);
+
+  // date validation
+  let invalidDates = null;
+  if (headerNorm.includes('order_date')){
+    invalidDates = 0;
+    for (const r of data){
+      const s = (r['order_date'] ?? r['Order_Date'] ?? r['order date'] ?? '').toString().trim();
+      if (!s){
+        invalidDates++;
+        continue;
+      }
+      const parsed = Date.parse(s);
+      if (isNaN(parsed)) {
+        // try common alternative formats dd/mm/yyyy or dd.mm.yyyy
+        const p = s.replace(/\./g,'/').split('/');
+        if (p.length === 3){
+          const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
+          if (isNaN(maybe)) invalidDates++; else {/*ok*/ }
+        } else {
+          invalidDates++;
+        }
+      }
+    }
+  }
+
+  // sales checks
+  let salesReport = { non_numeric: null, negative: null, outliers: null, outlier_threshold: null };
+  if (headerNorm.includes('sales')){
+    const values = [];
+    for (const r of data){
+      const raw = (r['sales'] ?? r['Sales'] ?? '').toString();
+      const cleaned = raw.replace(/[^\d\.\-]/g,'').trim();
+      const num = cleaned === '' ? NaN : parseFloat(cleaned);
+      values.push(num);
+    }
+    const numericCount = values.filter(v => !isNaN(v)).length;
+    const nonNumeric = values.length - numericCount;
+    const negative = values.filter(v => !isNaN(v) && v < 0).length;
+    // mean + 3*std
+    const nums = values.filter(v => !isNaN(v));
+    let outlierThresh = null, outliers = 0;
+    if (nums.length > 1){
+      const mean = nums.reduce((a,b)=>a+b,0)/nums.length;
+      const std = Math.sqrt(nums.map(x=>Math.pow(x-mean,2)).reduce((a,b)=>a+b,0)/(nums.length-1));
+      outlierThresh = mean + 3*std;
+      outliers = nums.filter(v => v > outlierThresh).length;
+    }
+    salesReport = { non_numeric: nonNumeric, negative: negative, outliers: outliers, outlier_threshold: outlierThresh };
+  }
+
+  // build dataIssues HTML
+  let di = '<div class="card"><h3>Проблемы в данных</h3>';
+  di += `<div class="muted"><strong>Пропуски в обязательных полях (кол-во строк):</strong></div>`;
+  di += `<table><thead><tr><th>поле</th><th>пропусков</th></tr></thead><tbody>`;
+  for (const k of requiredFields){
+    di += `<tr><td class="mono">${k}</td><td>${rowsWithMissing[k] === null ? '<em>нет поля</em>' : rowsWithMissing[k]}</td></tr>`;
+  }
+  di += '</tbody></table>';
+
+  di += `<div style="margin-top:8px;">`;
+  if (invalidDates !== null) di += `<div class="${invalidDates>0?'status-warn':'status-ok'}"><strong>Некорректных дат в order_date:</strong> ${invalidDates}</div>`;
+  else di += `<div class="muted">Колонка order_date отсутствует — проверка дат невозможна.</div>`;
+  di += `</div>`;
+
+  if (salesReport.non_numeric !== null){
+    di += `<div style="margin-top:8px;"><strong>Sales:</strong> <span class="muted">нечисловых: ${salesReport.non_numeric}, отрицательных: ${salesReport.negative}, выбросов: ${salesReport.outliers}${salesReport.outlier_threshold?(' (порог '+Math.round(salesReport.outlier_threshold)+')'):''}</span></div>`;
+  } else {
+    di += `<div class="muted">Колонка sales отсутствует — проверка невозможна.</div>`;
+  }
+
+  di += `<div style="margin-top:10px;" class="muted">Рекомендации: пропуски — удалить строки или заполнить; некорректные даты — исправить формат (YYYY-MM-DD предпочтителен); non-numeric sales — убрать символы валюты и точки с запятой, привести к числу.</div>`;
+
+  // sample of problem rows
+  di += `<div style="margin-top:10px;"><button class="btn" onclick="showProblemRows()">Показать первые проблемные строки</button></div>`;
+
+  di += '</div>';
+  dataIssuesEl.innerHTML = di;
+
+  status('Анализ завершён');
+
+  // store analysis results in window for modal use
+  window.__csv_analysis = { data: data, header: header, headerNorm: headerNorm, filename: filename, rowsWithMissing: rowsWithMissing, invalidDates: invalidDates, salesReport: salesReport };
+}
+
+function findSimilar(target, headerNorm){
+  // простая версия: возвращаем похожие по Levenshtein-like (встроенный метод)
+  const res = [];
+  for (const h of headerNorm){
+    if (h.includes(target.slice(0,3)) || target.includes(h.slice(0,3))) res.push(h);
+  }
+  return res;
+}
+
+function escapeHtml(s){
+  return (s||'').toString().replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
+}
+
+function closeModal(){
+  modalBackdrop.style.display = 'none';
+  modalBody.innerHTML = '';
+}
+
+function showProblemRows(){
+  const a = window.__csv_analysis;
+  if (!a){ alert('Сначала выполните анализ.'); return; }
+  const data = a.data;
+  const header = a.header;
+  // find rows with any missing required or bad sales or invalid date
+  const bad = [];
+  for (const r of data){
+    let isBad = false;
+    for (const f of requiredFields){
+      const v = r[f] ?? r[f.toLowerCase()] ?? '';
+      if (v === null || v === undefined || v.toString().trim() === '') { isBad = true; break; }
+    }
+    // sales non-numeric
+    const raw = (r['sales'] ?? r['Sales'] ?? '').toString();
+    const cleaned = raw.replace(/[^\d\.\-]/g,'').trim();
+    const num = cleaned === '' ? NaN : parseFloat(cleaned);
+    if (isNaN(num)) isBad = true;
+    // invalid date
+    const ds = (r['order_date'] ?? r['Order_Date'] ?? '').toString();
+    if (Date.parse(ds) && !isNaN(Date.parse(ds))){
+      // ok
+    } else {
+      // try alt
+      const p = ds.replace(/\./g,'/').split('/');
+      if (p.length===3){
+        const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
+        if (isNaN(maybe)) isBad = true;
+      } else {
+        isBad = isBad || ds.trim() === '';
+      }
+    }
+    if (isBad) bad.push(r);
+    if (bad.length >= 50) break;
+  }
+
+  // render modal
+  let html = `<div style="overflow:auto;"><table><thead><tr>`;
+  for (const h of (header.length?header:Object.keys(bad[0]||{}))){
+    html += `<th>${escapeHtml(h)}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+  for (const row of bad.slice(0,200)){
+    html += '<tr>';
+    for (const h of (header.length?header:Object.keys(row))){
+      html += `<td>${escapeHtml(row[h] ?? row[h.toLowerCase()] ?? '')}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  modalBody.innerHTML = html;
+  modalSub.textContent = `Проблемных строк (показаны первые ${Math.min(50,bad.length)})`;
+  modalBackdrop.style.display = 'flex';
+}
+</script>
+</body>
+</html>

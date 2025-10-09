@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TOP_SHTATS — Анализ выручки по штатам (Top 10)</title>
+
+  <!-- Шрифт -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <!-- PapaParse (CSV parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#101722;
+      --muted:#a9b2bf;
+      --accent:#4aa3ff;
+      --accent-2:#7be3ff;
+      --panel-bg: rgba(255,255,255,0.06);
+      --glass-border: rgba(255,255,255,0.06);
+      --table-row-even: rgba(255,255,255,0.02);
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background: linear-gradient(180deg, #0f1a26 0%, #17202a 100%);
+      color:#e9f1f7;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    .wrap{
+      max-width:1100px;
+      margin:36px auto;
+      padding:28px;
+    }
+
+    header.app-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:20px;
+    }
+
+    .logo {
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .logo .mark{
+      width:56px;
+      height:56px;
+      border-radius:12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 8px 30px rgba(74,163,255,0.12), inset 0 -6px 18px rgba(255,255,255,0.06);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:700;
+      font-size:18px;
+      color:#071024;
+    }
+    .logo .title h1{
+      font-size:20px;
+      margin:0;
+      color:#ffffff;
+      letter-spacing:0.2px;
+    }
+    .logo .title p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .controls{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .control-card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      padding:12px 14px;
+      border-radius:10px;
+      border:1px solid var(--glass-border);
+      box-shadow: 0 6px 20px rgba(2,8,20,0.5);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    select#yearSelect{
+      background:transparent;
+      color:var(--muted);
+      border:1px solid rgba(255,255,255,0.04);
+      padding:8px 10px;
+      border-radius:8px;
+      appearance:none;
+      -webkit-appearance:none;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    .btn{
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color:#071024;
+      border:none;
+      padding:8px 12px;
+      border-radius:8px;
+      font-weight:600;
+      cursor:pointer;
+      box-shadow: 0 8px 20px rgba(74,163,255,0.12);
+    }
+    .btn.ghost{
+      background:transparent;
+      color:var(--muted);
+      border:1px solid rgba(255,255,255,0.04);
+      box-shadow:none;
+    }
+    .btn:disabled{
+      opacity:0.45;
+      cursor:not-allowed;
+    }
+
+    main.card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:14px;
+      padding:18px;
+      margin-top:8px;
+      border:1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 20px 50px rgba(2,6,20,0.6);
+    }
+
+    .panel-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .selector{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+
+    .table-wrap{
+      overflow:auto;
+      border-radius:10px;
+      padding:6px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+    }
+
+    table.report{
+      width:100%;
+      border-collapse:collapse;
+      min-width:720px;
+      color:#eaf4ff;
+      font-size:14px;
+    }
+
+    table.report thead th{
+      text-align:left;
+      padding:12px 14px;
+      font-weight:600;
+      color:#ffffff;
+      background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-bottom:1px solid rgba(255,255,255,0.04);
+      position:sticky;
+      top:0;
+      z-index:2;
+    }
+
+    table.report tbody td{
+      padding:12px 14px;
+      border-bottom:1px solid rgba(255,255,255,0.03);
+      vertical-align:middle;
+    }
+
+    table.report tbody tr:nth-child(even){
+      background:var(--table-row-even);
+    }
+
+    .col-idx{ width:56px; color:var(--muted); }
+    .col-state{ width:40%; font-weight:600; color:#fff; }
+    .col-count{ text-align:center; color:var(--muted); }
+    .col-sales{ text-align:right; font-weight:700; color:var(--accent-2); }
+
+    .summary {
+      margin-top:12px;
+      padding:12px;
+      border-radius:10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+      border:1px solid rgba(255,255,255,0.02);
+      flex-wrap:wrap;
+    }
+    .summary .left{ color:var(--muted); font-size:14px; }
+    .summary .total{ font-size:18px; font-weight:700; color:#ffffff; }
+    .summary .top10{ text-align:right; min-width:220px; }
+    .summary .top10 .label { color:var(--muted); font-size:13px; }
+    .summary .top10 .value { font-weight:700; font-size:16px; color:var(--accent-2); }
+    .small-muted{ color:var(--muted); font-size:13px; }
+    .empty-block{ text-align:center; padding:60px 16px; color:var(--muted); border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005)); border:1px dashed rgba(255,255,255,0.03); }
+
+    /* Модалка */
+    .modal-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(2,6,20,0.7);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+      padding:20px;
+    }
+    .modal{
+      width:100%;
+      max-width:1200px;
+      height:80vh;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 30px 70px rgba(2,6,20,0.7);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      position:relative;
+    }
+    .modal header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:14px 16px;
+      border-bottom:1px solid rgba(255,255,255,0.03);
+    }
+    .modal header h3{ margin:0; font-size:16px; color:#fff; }
+    .modal header .muted{ color:var(--muted); font-size:13px; }
+    .modal .modal-body{
+      padding:12px;
+      overflow:auto;
+      height:100%;
+    }
+    .modal .close-btn{
+      background:transparent;
+      color:var(--muted);
+      border:1px solid rgba(255,255,255,0.03);
+      padding:6px 10px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    .modal table.modal-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+      color:#e9f6ff;
+    }
+    .modal table.modal-table thead th{
+      position:sticky;
+      top:0;
+      background:rgba(8,14,20,0.85);
+      padding:10px;
+      text-align:left;
+      z-index:5;
+      border-bottom:1px solid rgba(255,255,255,0.04);
+    }
+    .modal table.modal-table td{
+      padding:8px 10px;
+      border-bottom:1px solid rgba(255,255,255,0.02);
+      vertical-align:top;
+      max-width:300px;
+      word-break:break-word;
+    }
+
+    @media (max-width:800px){
+      .wrap{ padding:18px; }
+      .logo h1{ font-size:18px; }
+      table.report { font-size:13px; min-width:640px; }
+      .summary { flex-direction:column; align-items:flex-start; }
+      .summary .top10 { text-align:left; min-width:unset; }
+      .modal{ height:90vh; max-width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app-header">
+      <div class="logo">
+        <div class="mark">TS</div>
+        <div class="title">
+          <h1>TOP_SHTATS</h1>
+          <p>Анализ выручки по штатам — Top 10</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="control-card selector" style="padding-right:12px;">
+          <span class="small-muted">Выберите год:</span>
+          <select id="yearSelect"><option value="">— Год —</option></select>
+        </div>
+
+        <!-- Кнопка просмотра CSV (использует уже загруженный rawData) -->
+        <div class="control-card">
+          <button class="btn" id="btnOpenCsv" disabled>Просмотреть CSV</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="card" id="mainCard">
+      <div class="panel-top">
+        <div>
+          <h2 style="margin:0 0 6px 0;">Анализ выручки по штатам (Top 10)</h2>
+          <div class="small-muted">Файл: <code>orders_customers.csv</code> (автозагрузка из той же папки)</div>
+        </div>
+        <div class="small-muted" id="statusInfo">Попытка автозагрузки CSV...</div>
+      </div>
+
+      <div id="contentArea">
+        <div class="empty-block" id="emptyMessage">
+          Идёт попытка загрузить <code>orders_customers.csv</code>... Если страница открыта без сервера, автозагрузка может быть запрещена. Запустите локальный http-сервер или положите CSV рядом и откройте страницу через сервер.
+        </div>
+
+        <div id="tableArea" style="display:none;">
+          <div class="table-wrap" aria-live="polite">
+            <table class="report" id="reportTable" aria-describedby="tableDescription">
+              <thead>
+                <tr>
+                  <th class="col-idx">№</th>
+                  <th class="col-state">Штат</th>
+                  <th class="col-count">Кол-во заказов</th>
+                  <th class="col-sales">Выручка ($)</th>
+                </tr>
+              </thead>
+              <tbody id="reportBody">
+              </tbody>
+            </table>
+          </div>
+
+          <div class="summary" role="status">
+            <div class="left">
+              <div class="small-muted">Показано Top <span id="shownCount">0</span> штатов</div>
+              <div class="small-muted">Источник: <code>orders_customers.csv</code></div>
+            </div>
+
+            <div class="top10">
+              <div class="small-muted">Сумма выручки Top-10:</div>
+              <div class="value" id="top10Revenue">$0.00</div>
+              <div class="small-muted" style="margin-top:6px;">Доля Top-10 от общей выручки:</div>
+              <div class="value" id="top10Share">0.00%</div>
+            </div>
+
+            <div>
+              <div class="small-muted">Общая выручка за год</div>
+              <div class="total" id="totalRevenue">$0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Модальное окно просмотра CSV -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header>
+        <div>
+          <h3 id="modalTitle">Полный CSV — orders_customers.csv</h3>
+          <div class="muted" id="modalSub">Строк: 0</div>
+        </div>
+        <div>
+          <button class="close-btn" id="modalClose">Закрыть</button>
+        </div>
+      </header>
+      <div class="modal-body" id="modalBody">
+        <!-- таблица будет вставлена сюда -->
+        <div id="modalTableContainer" style="min-height:80px; color:var(--muted);">
+          Загрузка данных...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Глобальные
+    let rawData = [];
+    let aggregatedByYear = {};
+    const yearSelect = document.getElementById('yearSelect');
+    const statusInfo = document.getElementById('statusInfo');
+    const emptyMessage = document.getElementById('emptyMessage');
+    const tableArea = document.getElementById('tableArea');
+    const reportBody = document.getElementById('reportBody');
+    const totalRevenueEl = document.getElementById('totalRevenue');
+    const shownCountEl = document.getElementById('shownCount');
+    const top10RevenueEl = document.getElementById('top10Revenue');
+    const top10ShareEl = document.getElementById('top10Share');
+    const btnOpenCsv = document.getElementById('btnOpenCsv');
+
+    // Модалка
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalCloseBtn = document.getElementById('modalClose');
+    const modalTableContainer = document.getElementById('modalTableContainer');
+    const modalSub = document.getElementById('modalSub');
+
+    const usdFormatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 2
+    });
+
+    // Попытка автозагрузки при старте
+    (async function tryAutoLoad() {
+      const candidates = ['orders_customers.csv', 'data/orders_customers.csv'];
+      let loaded = false;
+      for (const path of candidates) {
+        try {
+          statusInfo.textContent = `Пытаюсь загрузить ${path} ...`;
+          const resp = await fetch(path);
+          if (!resp.ok) continue;
+          const text = await resp.text();
+          parseCSVText(text);
+          loaded = true;
+          break;
+        } catch (err) {
+          console.warn('fetch error for', path, err);
+          continue;
+        }
+      }
+      if (!loaded){
+        statusInfo.textContent = 'Не удалось автозагрузить CSV. Запустите локальный сервер или поместите файл рядом.';
+      }
+    })();
+
+    // Парсинг текста
+    function parseCSVText(text){
+      Papa.parse(text, {
+        header: true,
+        dynamicTyping: false,
+        skipEmptyLines: true,
+        complete: function(results){
+          rawData = results.data;
+          postProcessData();
+          // Активируем кнопку просмотра CSV (использует rawData)
+          btnOpenCsv.disabled = false;
+        },
+        error: function(err){
+          console.error('PapaParse error', err);
+          statusInfo.textContent = 'Ошибка парсинга CSV';
+        }
+      });
+    }
+
+    // Обработка данных для агрегации
+    function postProcessData(){
+      aggregatedByYear = {};
+      const yearsSet = new Set();
+      const normalized = [];
+
+      for (const row of rawData){
+        if (!row) continue;
+        let state = (row.state ?? row.State ?? '').toString().trim();
+        let dateStr = (row.order_date ?? row.OrderDate ?? row['order date'] ?? '').toString().trim();
+        let salesRaw = (row.sales ?? row.Sales ?? '0').toString().trim();
+        if (!state) continue;
+        let year = null;
+        if (dateStr){
+          const d = new Date(dateStr);
+          if (!isNaN(d)) year = d.getFullYear();
+          else {
+            const parts = dateStr.split(/[-\/\.]/);
+            if (parts.length >= 1) {
+              const y = parseInt(parts[0],10);
+              if (!isNaN(y) && y>1900 && y<2100) year = y;
+              else {
+                const last = parseInt(parts[2],10);
+                if (!isNaN(last) && last>1900 && last<2100) year = last;
+              }
+            }
+          }
+        }
+        if (year === null) continue;
+        const salesNum = parseFloat(salesRaw.replace(/[^\d\.\-]/g,''));
+        if (isNaN(salesNum)) continue;
+        normalized.push({ state, year, sales: salesNum });
+        yearsSet.add(year);
+      }
+
+      if (normalized.length === 0){
+        statusInfo.textContent = 'После парсинга не найдено валидных записей.';
+        return;
+      }
+
+      const byYear = {};
+      for (const r of normalized){
+        byYear[r.year] = byYear[r.year] || {};
+        byYear[r.year][r.state] = byYear[r.year][r.state] || { state: r.state, orders: 0, sales: 0 };
+        byYear[r.year][r.state].orders += 1;
+        byYear[r.year][r.state].sales += r.sales;
+      }
+      for (const y of Object.keys(byYear)){
+        const arr = Object.values(byYear[y]);
+        arr.sort((a,b) => b.sales - a.sales);
+        aggregatedByYear[y] = arr;
+      }
+
+      // Заполним селектор годов
+      const years = Array.from(yearsSet).sort((a,b)=>a-b);
+      populateYearSelect(years);
+      statusInfo.textContent = `CSV загружен — обработано ${normalized.length} строк; годы: ${years.join(', ')}`;
+      if (years.length>0){
+        yearSelect.value = years[years.length-1];
+        renderForYear(parseInt(yearSelect.value,10));
+      } else {
+        showEmpty('Нет доступных годов в файле.');
+      }
+    }
+
+    function populateYearSelect(years){
+      yearSelect.innerHTML = '<option value="">— Год —</option>';
+      for (const y of years){
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        yearSelect.appendChild(opt);
+      }
+    }
+
+    yearSelect.addEventListener('change', () => {
+      const y = parseInt(yearSelect.value,10);
+      if (!isNaN(y)) renderForYear(y);
+    });
+
+    function renderForYear(year){
+      const data = aggregatedByYear[year];
+      if (!data || data.length===0){
+        showEmpty(`За ${year} год данных не найдено.`);
+        return;
+      }
+      emptyMessage.style.display = 'none';
+      tableArea.style.display = 'block';
+      reportBody.innerHTML = '';
+
+      const top = data.slice(0,10);
+      for (let i=0;i<top.length;i++){
+        const r = top[i];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="col-idx">${i+1}</td>
+          <td class="col-state">${escapeHtml(r.state)}</td>
+          <td class="col-count">${r.orders}</td>
+          <td class="col-sales">${usdFormatter.format(roundToTwo(r.sales))}</td>
+        `;
+        reportBody.appendChild(tr);
+      }
+
+      let total = 0;
+      for (const item of data) total += item.sales;
+      let topSum = 0;
+      for (const item of top) topSum += item.sales;
+      const share = total === 0 ? 0 : (topSum / total) * 100;
+
+      totalRevenueEl.textContent = usdFormatter.format(roundToTwo(total));
+      top10RevenueEl.textContent = usdFormatter.format(roundToTwo(topSum));
+      top10ShareEl.textContent = `${roundToTwo(share)}%`;
+      shownCountEl.textContent = top.length;
+      statusInfo.textContent = `Показаны Top ${top.length} штатов за ${year}`;
+    }
+
+    function showEmpty(msg){
+      tableArea.style.display = 'none';
+      emptyMessage.style.display = 'block';
+      emptyMessage.textContent = msg || 'Нет данных для отображения.';
+    }
+
+    function roundToTwo(v){ return Math.round((v+Number.EPSILON)*100)/100; }
+    function escapeHtml(s){
+      return s.toString().replace(/[&<>"']/g, function(m){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+      });
+    }
+
+    // ========== МОДАЛКА: работа с уже загруженным rawData ==========
+    btnOpenCsv.addEventListener('click', openCsvModal);
+    modalCloseBtn.addEventListener('click', closeCsvModal);
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) closeCsvModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalBackdrop.style.display === 'flex') closeCsvModal();
+    });
+
+    function openCsvModal(){
+      if (!rawData || rawData.length === 0){
+        alert('Данные CSV ещё не загружены.');
+        return;
+      }
+      // Построить таблицу внутри модалки
+      buildModalTable(rawData);
+      modalSub.textContent = `Строк: ${rawData.length}`;
+      modalBackdrop.style.display = 'flex';
+      modalBackdrop.setAttribute('aria-hidden','false');
+      // Заблокировать скролл страницы
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCsvModal(){
+      modalBackdrop.style.display = 'none';
+      modalBackdrop.setAttribute('aria-hidden','true');
+      // Снять блокировку скролла
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      // Очистить контейнер (необязательно)
+      // modalTableContainer.innerHTML = '';
+    }
+
+    function buildModalTable(data){
+      // Определим заголовки, сохраняя желаемый порядок если есть
+      const defaultOrder = ['name','segment','state','city','order_date','ship_mode','sales'];
+      const firstRow = data.find(r => r && Object.keys(r).length>0);
+      if (!firstRow){
+        modalTableContainer.innerHTML = '<div class="small-muted">Нет данных для показа.</div>';
+        return;
+      }
+      const keys = Object.keys(firstRow);
+      // Сортируем ключи: сначала дефолтные в порядке defaultOrder, затем остальные
+      const orderedKeys = [];
+      for (const k of defaultOrder) if (keys.includes(k)) orderedKeys.push(k);
+      for (const k of keys) if (!orderedKeys.includes(k)) orderedKeys.push(k);
+
+      // Создадим таблицу
+      let html = '<div style="overflow:auto;"><table class="modal-table"><thead><tr>';
+      for (const k of orderedKeys){
+        html += `<th>${escapeHtml(k)}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+      // Добавляем строки — для экономии памяти можно ограничить вывод, но пользователь просил показывать таблицу из загруженного файла (без доп.подгрузки)
+      for (let i=0;i<data.length;i++){
+        const row = data[i];
+        // Пропускаем полностью пустые строки
+        if (!row || Object.keys(row).length === 0) continue;
+        html += '<tr>';
+        for (const k of orderedKeys){
+          const cell = row[k] ?? row[k.toLowerCase()] ?? '';
+          html += `<td>${escapeHtml(cell)}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table></div>';
+      modalTableContainer.innerHTML = html;
+
+      // Немного прокрутки кверху
+      modalTableContainer.scrollTop = 0;
+    }
+
+    // Помогает включить кнопку просмотра, если rawData уже загружен ранее
+    // (в parseCSVText мы её включаем сразу, но добавим проверку)
+    (function ensureButtonState(){
+      if (rawData && rawData.length>0) btnOpenCsv.disabled = false;
+      else btnOpenCsv.disabled = true;
+    })();
+
+  </script>
+</body>
+</html>

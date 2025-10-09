@@ -1,82 +1,80 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CSV Validator — Обработка некорректных данных</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CSV Validator — Автоматический поиск в test-data1 / test-data2</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<!-- PapaParse для простого и надёжного парсинга CSV -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <style>
-    :root{ --bg:#0f1720; --muted:#a9b2bf; --accent:#4aa3ff; --panel:#0b1220; font-family:Inter,system-ui,Arial; color:#eaf4ff;}
-    body{ margin:0; background:linear-gradient(180deg,#07101a,#0f1720); min-height:100vh; }
-    .wrap{ max-width:1100px; margin:28px auto; padding:20px; }
-    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;}
-    h1{ margin:0; font-size:20px;}
-    .controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-    .card{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.03);}
-    input[type=file]{ color:var(--muted); }
-    .btn{ background:linear-gradient(90deg,var(--accent),#7be3ff); color:#071024; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600;}
-    .muted{ color:var(--muted); font-size:13px;}
-    .results{ margin-top:12px; display:grid; gap:10px;}
-    pre{ white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,0.02); padding:12px; border-radius:8px; }
-    table{ width:100%; border-collapse:collapse; font-size:13px; color:#eaf4ff; }
-    table th,table td{ padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.03); text-align:left; }
-    .badge{ display:inline-block; padding:6px 8px; border-radius:8px; background:rgba(255,255,255,0.02); color:var(--muted); font-weight:600; }
-    .status-ok{ color:#7ee787; }
-    .status-warn{ color:#ffd166; }
-    .status-err{ color:#ff7b7b; }
-    .modal-backdrop{ position:fixed; inset:0; display:none; background:rgba(2,6,20,0.7); align-items:center; justify-content:center; z-index:9999; padding:20px;}
-    .modal{ width:100%; max-width:1100px; height:80vh; background:var(--panel); border-radius:10px; padding:12px; overflow:auto; border:1px solid rgba(255,255,255,0.03);}
-    .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; }
-  </style>
+<style>
+  :root{ --bg:#08121a; --muted:#9db1c7; --accent:#4aa3ff; --panel:#0b1620; color:#eaf4ff; font-family:Inter,system-ui,Arial; }
+  body{ margin:0; background:linear-gradient(180deg,#051018,#08121a); min-height:100vh; color:var(--muted); }
+  .wrap{ max-width:1200px; margin:18px auto; padding:16px; display:grid; grid-template-columns: 360px 1fr; gap:16px; }
+  header{ grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; color:#cfe9ff; }
+  h1{ margin:0; font-size:18px; color:#e6f7ff; }
+  .panel{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.03); }
+  .muted{ color:var(--muted); font-size:13px; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; font-size:13px; color:#dff3ff; }
+  .btn{ background:linear-gradient(90deg,var(--accent),#7be3ff); color:#071024; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
+  .file-item{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px; border-radius:8px; background:rgba(255,255,255,0.01); }
+  table{ width:100%; border-collapse:collapse; font-size:13px; color:#eaf4ff; }
+  table th, table td{ padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.03); text-align:left; }
+  .status-ok{ color:#7ee787; } .status-warn{ color:#ffd166; } .status-err{ color:#ff7b7b; }
+  .modal-backdrop{ position:fixed; inset:0; display:none; background:rgba(2,6,20,0.75); align-items:center; justify-content:center; z-index:9999; padding:20px;}
+  .modal{ width:100%; max-width:1100px; height:80vh; background:var(--panel); border-radius:10px; padding:12px; overflow:auto; border:1px solid rgba(255,255,255,0.03); color:var(--muted); }
+  .small{ font-size:12px; color:var(--muted); }
+</style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <div>
-        <h1>CSV Validator — Обработка некорректных данных</h1>
-        <div class="muted">Реализация: проверка структуры и качества данных (по ТЗ Task1.2)</div>
+        <h1>CSV Validator — автоматический поиск и анализ</h1>
+        <div class="small">Ищет файлы в папках <span class="mono">test-data1</span> и <span class="mono">test-data2</span>.</div>
       </div>
-      <div class="controls">
-        <label class="badge">Тестовый набор:
-          <select id="testSet">
-            <option value="auto">Авто (анализируем файл)</option>
-            <option value="test-data1">Test-data1 (структура)</option>
-            <option value="test-data2">Test-data2 (значения)</option>
-          </select>
-        </label>
-        <input id="fileInput" type="file" accept=".csv" />
-        <button id="btnAnalyze" class="btn">Анализировать</button>
-        <button id="btnTrySample" class="btn">Попробовать orders_invalid_fields3</button>
-      </div>
+      <div class="small">Открывайте страницу через локальный HTTP-сервер (например <span class="mono">python -m http.server</span>).</div>
     </header>
 
-    <main class="card">
-      <div class="row">
-        <div style="flex:1;">
-          <div class="muted">Обязательные поля: <span class="mono">name, segment, state, city, order_date, ship_mode, sales</span></div>
-          <div class="muted" style="margin-top:6px;">Загрузите CSV или используйте кнопку автозагрузки (если файл лежит в папке data/ рядом со страницей).</div>
-        </div>
-        <div style="min-width:260px; text-align:right;">
-          <div id="status" class="muted">Статус: ожидание</div>
-        </div>
+    <!-- ЛЕВЫЙ: управление -->
+    <aside class="panel">
+      <div style="margin-bottom:8px;"><strong class="mono">Выбор папки</strong></div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <select id="folderSelect" class="mono" style="flex:1; padding:6px;">
+          <option value="test-data1" selected>test-data1</option>
+          <option value="test-data2">test-data2</option>
+        </select>
+        <button id="refreshBtn" class="btn">Обновить</button>
       </div>
 
-      <div class="results" id="resultsArea">
-        <div id="summary" style="display:none;"></div>
-        <div id="structure" style="display:none;"></div>
-        <div id="dataIssues" style="display:none;"></div>
+      <div style="margin-bottom:8px;"><strong class="mono">Локальный файл</strong></div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <input id="fileInput" type="file" accept=".csv" />
+        <button id="analyzeLocalBtn" class="btn">Анализ</button>
       </div>
+
+      <div style="margin-top:6px;">
+        <button id="analyzeAllBtn" class="btn" style="width:100%; margin-bottom:8px;">Анализировать все файлы папки</button>
+        <button id="tryOrdersBtn" class="btn" style="width:100%;">Попробовать orders_invalid_fields3</button>
+      </div>
+
+      <div style="margin-top:12px;" class="small">Если хотите, положите в папку файл <span class="mono">manifest.json</span> со списком имён (JSON-массив). Тогда страница автоматически использует его.</div>
+    </aside>
+
+    <!-- ПРАВЫЙ: вывод сводки и результатов -->
+    <main class="panel" id="mainPanel">
+      <div id="folderSummary" style="margin-bottom:12px;"></div>
+      <div id="analysisArea"></div>
+      <div id="notes" class="small" style="margin-top:8px;"></div>
     </main>
   </div>
 
+  <!-- Модал для просмотра таблицы -->
   <div class="modal-backdrop" id="modalBackdrop">
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div><strong id="modalTitle">CSV — просмотр</strong><div class="muted" id="modalSub">строк: 0</div></div>
+        <div><strong id="modalTitle">CSV — просмотр</strong><div id="modalSub" class="small"></div></div>
         <div><button class="btn" id="modalClose">Закрыть</button></div>
       </div>
       <div id="modalBody"></div>
@@ -84,308 +82,396 @@
   </div>
 
 <script>
+/* =========== Настройки и вспомогательные данные =========== */
 const requiredFields = ['name','segment','state','city','order_date','ship_mode','sales'];
-const statusEl = document.getElementById('status');
-const summaryEl = document.getElementById('summary');
-const structureEl = document.getElementById('structure');
-const dataIssuesEl = document.getElementById('dataIssues');
-const resultsArea = document.getElementById('resultsArea');
+
+// Если manifest отсутствует — проверяем эти типичные имена файлов (настраивайте)
+const candidateFiles = [
+  'orders_invalid_fields3.csv',
+  'orders_missing_values.csv',
+  'orders_invalid_dates.csv',
+  'orders_empty.csv',
+  'orders_no_entries.csv',
+  'orders.csv'
+];
+
+/* ======== Элементы DOM ======== */
+const folderSelect = document.getElementById('folderSelect');
+const refreshBtn = document.getElementById('refreshBtn');
+const folderSummary = document.getElementById('folderSummary');
+const analysisArea = document.getElementById('analysisArea');
+const notesEl = document.getElementById('notes');
 const fileInput = document.getElementById('fileInput');
-const btnAnalyze = document.getElementById('btnAnalyze');
-const btnTrySample = document.getElementById('btnTrySample');
-const testSet = document.getElementById('testSet');
+const analyzeLocalBtn = document.getElementById('analyzeLocalBtn');
+const analyzeAllBtn = document.getElementById('analyzeAllBtn');
+const tryOrdersBtn = document.getElementById('tryOrdersBtn');
 const modalBackdrop = document.getElementById('modalBackdrop');
 const modalBody = document.getElementById('modalBody');
+const modalTitle = document.getElementById('modalTitle');
 const modalSub = document.getElementById('modalSub');
 document.getElementById('modalClose').addEventListener('click', closeModal);
 
-btnTrySample.addEventListener('click', async () => {
-  // Попытка загрузить файл как в вашем образце (data/orders_invalid_fields3.csv)
-  await tryFetch('test-data1/orders_invalid_fields3.csv');
-});
+/* ======= Функции для проверки существования файлов (robust для локального сервера) ======= */
+async function probeFile(url){
+  // Попытка: сначала GET с Range, если не сработает, пробуем обычный GET.
+  try {
+    // Range может не поддерживаться сервером — не критично
+    const r = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-2047' }});
+    if (r.ok){
+      const text = await r.text();
+      return { exists: true, size: r.headers.get('content-length') || text.length, sample: text.slice(0, 2048) };
+    }
+  } catch(e){
+    // fallback
+  }
+  try {
+    const r2 = await fetch(url, { method: 'GET' });
+    if (r2.ok) {
+      const text = await r2.text();
+      return { exists: true, size: r2.headers.get('content-length') || text.length, sample: text.slice(0,2048) };
+    }
+  } catch(e){}
+  return { exists: false };
+}
 
-btnAnalyze.addEventListener('click', () => {
-  if (fileInput.files.length === 0){
-    alert('Выберите CSV файл через поле "Выбрать файл" или нажмите кнопку автозагрузки.');
+/* ======= Попытка получить manifest.json — если есть, используем его ======= */
+async function getManifest(folder){
+  const path = `${folder}/manifest.json`;
+  try {
+    const r = await fetch(path);
+    if (!r.ok) return null;
+    const arr = await r.json();
+    if (Array.isArray(arr)) return arr.map(String);
+    return null;
+  } catch(e){ return null; }
+}
+
+/* ======= Составляем список файлов для папки (автоматически) ======= */
+async function buildFileListForFolder(folder){
+  setNotes(`Сбор списка файлов в ${folder}...`);
+  // 1) попытка manifest.json
+  const manifest = await getManifest(folder);
+  if (manifest && manifest.length) {
+    setNotes(`Использую manifest.json (${folder}/manifest.json).`);
+    return manifest;
+  }
+  // 2) probe candidateFiles параллельно
+  const tries = candidateFiles.map(name => {
+    const path = `${folder}/${name}`;
+    return probeFile(path).then(res => ({ name, path, found: res.exists, size: res.size, sample: res.sample }));
+  });
+  const results = await Promise.all(tries);
+  const found = results.filter(r=>r.found);
+  if (found.length) {
+    setNotes(`Найдено ${found.length} известных файлов в ${folder}.`);
+    return found.map(f => f.name);
+  }
+  setNotes(`Не найдено известных файлов в ${folder}. Можно добавить имена в candidateFiles или создать manifest.json.`);
+  return [];
+}
+
+/* ======= Отрисовка короткой сводки папки ======= */
+async function renderFolderSummary(folder){
+  folderSummary.innerHTML = `<div class="small">Сбор информации по папке <span class="mono">${folder}</span>…</div>`;
+  const files = await buildFileListForFolder(folder);
+  if (!files.length){
+    folderSummary.innerHTML += `<div class="small">Файлы не найдены.</div>`;
     return;
   }
-  const f = fileInput.files[0];
-  readFileAndAnalyze(f);
-});
+  // Для каждого файла пробуем probeFile и отрисуем информацию (параллельно)
+  const probes = files.map(name => probeFile(`${folder}/${name}`).then(res => ({ name, path:`${folder}/${name}`, res })));
+  const results = await Promise.all(probes);
 
-async function tryFetch(path){
-  status('Пытаюсь загрузить ' + path + ' ...');
-  try {
-    const resp = await fetch(path);
-    if (!resp.ok) throw new Error('fetch failed');
-    const text = await resp.text();
-    parseAndAnalyze(text, path);
-  } catch (err){
-    status('Не удалось автозагрузить файл. Возможны ограничения загрузки через file:// — запустите локальный сервер.');
-    alert('Автозагрузка не удалась. Положите файл рядом и используйте выбор файла или запустите локальный сервер.');
-  }
-}
-
-function readFileAndAnalyze(file){
-  status('Чтение файла ' + file.name + ' ...');
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    parseAndAnalyze(ev.target.result, file.name);
-  };
-  reader.onerror = (e) => {
-    status('Ошибка чтения файла.');
-  };
-  reader.readAsText(file, 'utf-8');
-}
-
-function status(text){
-  statusEl.textContent = 'Статус: ' + text;
-}
-
-function parseAndAnalyze(csvText, filename){
-  status('Парсинг CSV ...');
-  Papa.parse(csvText, {
-    header: true,
-    skipEmptyLines: true,
-    dynamicTyping: false,
-    complete: function(results){
-      const data = results.data;
-      runChecks(data, filename, results.meta);
-    },
-    error: function(err){
-      status('Ошибка парсинга CSV: ' + err.message);
+  let html = '<div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">';
+  for (const r of results){
+    if (!r.res.exists) {
+      html += `<div class="file-item"><div class="mono">${r.name}</div><div class="small status-err">не доступен</div></div>`;
+    } else {
+      html += `<div class="file-item">
+                <div>
+                  <div class="mono">${r.name}</div>
+                  <div class="small muted">путь: <span class="mono">${r.path}</span></div>
+                </div>
+                <div style="text-align:right">
+                  <div class="small">size: ${r.res.size ?? '—'} B</div>
+                  <div style="margin-top:6px">
+                    <button class="btn" onclick="fetchAndAnalyze('${r.path}')">Анализ</button>
+                    <button class="btn" onclick="fetchAndShow('${r.path}')">Просмотр</button>
+                  </div>
+                </div>
+               </div>`;
     }
+  }
+  html += '</div>';
+  folderSummary.innerHTML = html;
+}
+
+/* ======= Анализ одного файла (с использованием PapaParse) ======= */
+function parseAndAnalyze(csvText, filename){
+  Papa.parse(csvText, {
+    header:true, skipEmptyLines:true,
+    complete: function(results){ runChecks(results.data, filename, results.meta); },
+    error: function(err){ setNotes('Ошибка парсинга: ' + err.message); }
   });
 }
 
+async function fetchAndAnalyze(path){
+  try {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error('Не удалось загрузить ' + path);
+    const txt = await r.text();
+    parseAndAnalyze(txt, path);
+  } catch(e){
+    alert('Ошибка: ' + e.message + '. Запустите локальный сервер и убедитесь, что путь корректен.');
+  }
+}
+
+async function fetchAndShow(path){
+  try {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error('Не удалось загрузить ' + path);
+    const txt = await r.text();
+    showTableModal(txt, path);
+  } catch(e){
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+/* ======= Массовый анализ всех файлов папки ======= */
+async function analyzeAllInFolder(folder){
+  setNotes('Анализ всех файлов в папке: ' + folder);
+  const fileNames = await buildFileListForFolder(folder);
+  if (!fileNames.length){ setNotes('Нет файлов для анализа.'); return; }
+  analysisArea.innerHTML = `<div class="small">Анализ ${fileNames.length} файлов (выполняется)...</div>`;
+  const tasks = fileNames.map(async name => {
+    const path = `${folder}/${name}`;
+    try {
+      const r = await fetch(path);
+      if (!r.ok) return { name, path, error: 'Не удалось загрузить' };
+      const txt = await r.text();
+      // парсим кратко и собираем сводку (без вывода всех данных)
+      const parsed = Papa.parse(txt, { header:true, skipEmptyLines:true });
+      const nRows = parsed.data.length;
+      const header = parsed.meta && parsed.meta.fields ? parsed.meta.fields : (nRows>0?Object.keys(parsed.data[0]):[]);
+      // подсчёт основных проблем (лишь счётчики)
+      const headerNorm = header.map(h=>h.toLowerCase());
+      const missingFields = requiredFields.filter(f=>!headerNorm.includes(f));
+      // пропуски
+      const rowsWithMissing = {};
+      for (const f of requiredFields){
+        if (headerNorm.includes(f)){
+          let cnt = 0;
+          for (const row of parsed.data){ if (!row[f] || row[f].toString().trim()==='') cnt++; }
+          rowsWithMissing[f] = cnt;
+        } else rowsWithMissing[f] = null;
+      }
+      return { name, path, nRows, header, missingFields, rowsWithMissing };
+    } catch(e){
+      return { name, path, error: e.message };
+    }
+  });
+
+  const results = await Promise.all(tasks);
+  // отрисуем компактную сводку
+  let html = '<div><strong class="mono">Результаты массового анализа</strong></div><table><thead><tr><th>файл</th><th>строк</th><th>отсутствуют поля</th><th>пропуски (по полям)</th><th>действие</th></tr></thead><tbody>';
+  for (const r of results){
+    if (r.error) {
+      html += `<tr><td class="mono">${r.name}</td><td colspan="3" class="small status-err">${r.error}</td><td><button class="btn" onclick="fetchAndAnalyze('${r.path}')">Повтор</button></td></tr>`;
+    } else {
+      const miss = r.missingFields.length ? r.missingFields.join(', ') : '<span class="status-ok">нет</span>';
+      const pm = requiredFields.map(f => (r.rowsWithMissing && r.rowsWithMissing[f] !== null ? `${f}:${r.rowsWithMissing[f]}` : `${f}:—`)).join('; ');
+      html += `<tr>
+                <td class="mono">${r.name}</td>
+                <td>${r.nRows}</td>
+                <td class="small">${miss}</td>
+                <td class="small mono">${pm}</td>
+                <td><button class="btn" onclick="fetchAndAnalyze('${r.path}')">Анализ</button></td>
+               </tr>`;
+    }
+  }
+  html += '</tbody></table>';
+  analysisArea.innerHTML = html;
+  setNotes('Массовый анализ завершён.');
+}
+
+/* ======= Реализация детального анализа (runChecks) ======= */
 function runChecks(data, filename, meta){
-  // data: array of objects
-  resultsArea.style.display = 'block';
-  summaryEl.style.display = 'block';
-  structureEl.style.display = 'block';
-  dataIssuesEl.style.display = 'block';
-
-  // 1) Summary
   const nRows = data.length;
-  const nCols = meta && meta.fields ? meta.fields.length : (nRows>0?Object.keys(data[0]).length:0);
-  summaryEl.innerHTML = `<div class="card"><strong>Файл:</strong> <span class="mono">${filename}</span> — <span class="muted">${nRows} строк, ${nCols} колонок</span></div>`;
-
-  // 2) Structure checks
   const header = meta && meta.fields ? meta.fields.map(h=>h.toString().trim()) : (nRows>0?Object.keys(data[0]):[]);
   const headerNorm = header.map(h=>h.toLowerCase());
-  const present = {};
-  requiredFields.forEach(f => present[f] = headerNorm.includes(f));
-  const missing = requiredFields.filter(f => !present[f]);
-  const extra = header.filter(h => !requiredFields.includes(h.toLowerCase()));
 
-  // поиск похожих полей при опечатках
-  const similar = {};
-  if (missing.length > 0){
-    missing.forEach(m => {
-      similar[m] = findSimilar(m, headerNorm);
-    });
-  }
+  // summary
+  let html = `<div class="panel"><div style="display:flex;justify-content:space-between;align-items:center">
+    <div><strong class="mono">${filename}</strong><div class="small">строк: ${nRows}, колонок: ${header.length}</div></div>
+    <div><button class="btn" onclick="showRawModal()">Просмотреть таблицу</button></div>
+  </div></div>`;
 
-  let structHtml = '<div class="card"><h3>Проверка структуры</h3>';
-  structHtml += `<div class="muted"><strong>Заголовки:</strong> <span class="mono">${escapeHtml(header.join(', '))}</span></div>`;
-  if (nRows === 0){
-    structHtml += `<p class="status-err"><strong>Файл пустой (orders_empty.csv)</strong></p>`;
-  } else {
-    if (nRows > 0 && header.length>0 && data.every(r => Object.keys(r).length === 0)){
-      structHtml += `<p class="status-err"><strong>В файле есть только заголовки, но нет записей (orders_no_entries.csv)</strong></p>`;
-    }
-  }
-  if (missing.length > 0){
-    structHtml += `<p class="status-err"><strong>Отсутствуют обязательные поля:</strong> ${missing.join(', ')}</p>`;
-    if (Object.keys(similar).length > 0){
-      structHtml += `<div class="muted">Похожие имена колонок (возможная опечатка):<ul>`;
-      for (const k in similar){
-        structHtml += `<li>${k} → ${similar[k].length ? similar[k].join(', ') : '<em>не найдено похожих</em>'}</li>`;
-      }
-      structHtml += '</ul></div>';
-    }
-  } else {
-    structHtml += `<p class="status-ok"><strong>Все обязательные поля присутствуют.</strong></p>`;
-  }
-  if (extra.length>0){
-    structHtml += `<div class="muted"><strong>Дополнительные поля (необязательные):</strong> ${escapeHtml(extra.join(', '))}</div>`;
-  }
-  structHtml += '</div>';
-  structureEl.innerHTML = structHtml;
+  // structure check
+  const missing = requiredFields.filter(f=>!headerNorm.includes(f));
+  const extra = header.filter(h=>!requiredFields.includes(h.toLowerCase()));
+  html += `<div class="panel" style="margin-top:10px;"><h3>Проверка структуры</h3><div class="small mono">Заголовки: ${header.join(', ')}</div>`;
+  if (nRows===0) html += `<div class="status-err">Файл пустой.</div>`;
+  if (missing.length) html += `<div class="status-err">Отсутствуют поля: ${missing.join(', ')}</div>`;
+  else html += `<div class="status-ok">Все обязательные поля присутствуют</div>`;
+  if (extra.length) html += `<div class="small">Доп. поля: ${extra.join(', ')}</div>`;
+  html += `</div>`;
 
-  // Если структуры нет — останавливаем дальше по test-data1. Но если testSet == test-data2 или auto, продолжаем анализ значений где это возможно.
-  // 3) Data quality checks
+  // data quality
+  // пропуски
   const rowsWithMissing = {};
-  let anyMissingRows = 0;
-  requiredFields.forEach(f => {
+  for (const f of requiredFields){
     if (headerNorm.includes(f)){
       let cnt = 0;
-      for (const r of data){
-        const val = r[f] ?? r[f.toLowerCase()];
-        if (val === undefined || val === null || val.toString().trim() === '') cnt++;
-      }
+      for (const r of data){ const v = r[f]; if (v===undefined || v===null || v.toString().trim()==='') cnt++; }
       rowsWithMissing[f] = cnt;
-    } else {
-      rowsWithMissing[f] = null;
-    }
-  });
-  anyMissingRows = requiredFields.some(f => rowsWithMissing[f] && rowsWithMissing[f] > 0);
-
-  // date validation
+    } else rowsWithMissing[f] = null;
+  }
+  // dates
   let invalidDates = null;
   if (headerNorm.includes('order_date')){
     invalidDates = 0;
     for (const r of data){
-      const s = (r['order_date'] ?? r['Order_Date'] ?? r['order date'] ?? '').toString().trim();
-      if (!s){
-        invalidDates++;
-        continue;
-      }
+      const s = (r['order_date'] ?? '').toString().trim();
+      if (!s) { invalidDates++; continue; }
       const parsed = Date.parse(s);
-      if (isNaN(parsed)) {
-        // try common alternative formats dd/mm/yyyy or dd.mm.yyyy
+      if (isNaN(parsed)){
+        // попытка dd.mm.yyyy или dd/mm/yyyy
         const p = s.replace(/\./g,'/').split('/');
-        if (p.length === 3){
+        if (p.length===3){
           const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
-          if (isNaN(maybe)) invalidDates++; else {/*ok*/ }
-        } else {
-          invalidDates++;
-        }
+          if (isNaN(maybe)) invalidDates++; 
+        } else invalidDates++;
       }
     }
   }
 
   // sales checks
-  let salesReport = { non_numeric: null, negative: null, outliers: null, outlier_threshold: null };
+  let salesReport = { non_numeric:null, negative:null, outliers:null, outlier_threshold:null };
   if (headerNorm.includes('sales')){
-    const values = [];
-    for (const r of data){
-      const raw = (r['sales'] ?? r['Sales'] ?? '').toString();
+    const values = data.map(r => {
+      const raw = (r['sales'] ?? '').toString();
       const cleaned = raw.replace(/[^\d\.\-]/g,'').trim();
-      const num = cleaned === '' ? NaN : parseFloat(cleaned);
-      values.push(num);
-    }
-    const numericCount = values.filter(v => !isNaN(v)).length;
-    const nonNumeric = values.length - numericCount;
-    const negative = values.filter(v => !isNaN(v) && v < 0).length;
-    // mean + 3*std
-    const nums = values.filter(v => !isNaN(v));
+      return cleaned==='' ? NaN : parseFloat(cleaned);
+    });
+    const numeric = values.filter(v=>!isNaN(v));
+    const nonNumeric = values.length - numeric.length;
+    const negative = numeric.filter(v=>v<0).length;
     let outlierThresh = null, outliers = 0;
-    if (nums.length > 1){
-      const mean = nums.reduce((a,b)=>a+b,0)/nums.length;
-      const std = Math.sqrt(nums.map(x=>Math.pow(x-mean,2)).reduce((a,b)=>a+b,0)/(nums.length-1));
+    if (numeric.length>1){
+      const mean = numeric.reduce((a,b)=>a+b,0)/numeric.length;
+      const std = Math.sqrt(numeric.map(x=>Math.pow(x-mean,2)).reduce((a,b)=>a+b,0)/(numeric.length-1));
       outlierThresh = mean + 3*std;
-      outliers = nums.filter(v => v > outlierThresh).length;
+      outliers = numeric.filter(v=>v>outlierThresh).length;
     }
-    salesReport = { non_numeric: nonNumeric, negative: negative, outliers: outliers, outlier_threshold: outlierThresh };
+    salesReport = { non_numeric: nonNumeric, negative, outliers, outlier_threshold: outlierThresh };
   }
 
-  // build dataIssues HTML
-  let di = '<div class="card"><h3>Проблемы в данных</h3>';
-  di += `<div class="muted"><strong>Пропуски в обязательных полях (кол-во строк):</strong></div>`;
-  di += `<table><thead><tr><th>поле</th><th>пропусков</th></tr></thead><tbody>`;
-  for (const k of requiredFields){
-    di += `<tr><td class="mono">${k}</td><td>${rowsWithMissing[k] === null ? '<em>нет поля</em>' : rowsWithMissing[k]}</td></tr>`;
+  html += `<div class="panel" style="margin-top:10px;"><h3>Проблемы в данных</h3>
+           <div class="small">Пропуски:</div><table><thead><tr><th>поле</th><th>пропусков</th></tr></thead><tbody>`;
+  for (const f of requiredFields){
+    html += `<tr><td class="mono">${f}</td><td>${rowsWithMissing[f]===null?'<em>нет поля</em>':rowsWithMissing[f]}</td></tr>`;
   }
-  di += '</tbody></table>';
+  html += `</tbody></table>`;
+  html += `<div style="margin-top:8px;">${ invalidDates!==null ? `<div class="${invalidDates>0?'status-warn':'status-ok'}">Некорректных дат: ${invalidDates}</div>` : '<div class="small">Колонка order_date отсутствует</div>'}</div>`;
+  if (salesReport.non_numeric!==null){
+    html += `<div style="margin-top:8px;" class="small">Sales: non-numeric=${salesReport.non_numeric}, negative=${salesReport.negative}, outliers=${salesReport.outliers}${salesReport.outlier_threshold?(' (порог '+Math.round(salesReport.outlier_threshold)+')'):''}</div>`;
+  } else html += `<div class="small">Колонка sales отсутствует</div>`;
+  html += `<div style="margin-top:8px;" class="small">Рекомендации: удалить/заполнить пропуски, привести даты к YYYY-MM-DD, очистить sales от символов валюты.</div>`;
+  html += `<div style="margin-top:8px;"><button class="btn" onclick="showProblemRows()">Показать проблемные строки</button></div>`;
+  html += `</div>`;
 
-  di += `<div style="margin-top:8px;">`;
-  if (invalidDates !== null) di += `<div class="${invalidDates>0?'status-warn':'status-ok'}"><strong>Некорректных дат в order_date:</strong> ${invalidDates}</div>`;
-  else di += `<div class="muted">Колонка order_date отсутствует — проверка дат невозможна.</div>`;
-  di += `</div>`;
-
-  if (salesReport.non_numeric !== null){
-    di += `<div style="margin-top:8px;"><strong>Sales:</strong> <span class="muted">нечисловых: ${salesReport.non_numeric}, отрицательных: ${salesReport.negative}, выбросов: ${salesReport.outliers}${salesReport.outlier_threshold?(' (порог '+Math.round(salesReport.outlier_threshold)+')'):''}</span></div>`;
-  } else {
-    di += `<div class="muted">Колонка sales отсутствует — проверка невозможна.</div>`;
-  }
-
-  di += `<div style="margin-top:10px;" class="muted">Рекомендации: пропуски — удалить строки или заполнить; некорректные даты — исправить формат (YYYY-MM-DD предпочтителен); non-numeric sales — убрать символы валюты и точки с запятой, привести к числу.</div>`;
-
-  // sample of problem rows
-  di += `<div style="margin-top:10px;"><button class="btn" onclick="showProblemRows()">Показать первые проблемные строки</button></div>`;
-
-  di += '</div>';
-  dataIssuesEl.innerHTML = di;
-
-  status('Анализ завершён');
-
-  // store analysis results in window for modal use
-  window.__csv_analysis = { data: data, header: header, headerNorm: headerNorm, filename: filename, rowsWithMissing: rowsWithMissing, invalidDates: invalidDates, salesReport: salesReport };
+  analysisArea.innerHTML = html;
+  // сохраним для модалей
+  window.__last_csv = { data, header, filename };
 }
 
-function findSimilar(target, headerNorm){
-  // простая версия: возвращаем похожие по Levenshtein-like (встроенный метод)
-  const res = [];
-  for (const h of headerNorm){
-    if (h.includes(target.slice(0,3)) || target.includes(h.slice(0,3))) res.push(h);
+/* ======= UI: локальный файл и кнопки ======= */
+analyzeLocalBtn.addEventListener('click', () => {
+  if (fileInput.files.length===0){ alert('Выберите CSV файл через поле'); return; }
+  const f = fileInput.files[0];
+  const reader = new FileReader();
+  reader.onload = e => parseAndAnalyze(e.target.result, f.name);
+  reader.readAsText(f, 'utf-8');
+});
+
+refreshBtn.addEventListener('click', () => renderFolderSummary(folderSelect.value));
+analyzeAllBtn.addEventListener('click', () => analyzeAllInFolder(folderSelect.value));
+tryOrdersBtn.addEventListener('click', () => fetchAndAnalyze(`test-data1/orders_invalid_fields3.csv`));
+
+/* ======= Модальные функции и просмотр ======= */
+function showRawModal(){
+  const last = window.__last_csv;
+  if (!last){ alert('Сначала выполните анализ файла.'); return; }
+  const { data, header, filename } = last;
+  modalTitle.textContent = `Таблица: ${filename}`;
+  modalSub.textContent = `строк: ${data.length}, колонки: ${header.join(', ')}`;
+  let html = '<div style="overflow:auto;"><table><thead><tr>';
+  const cols = header.length ? header : Object.keys(data[0]||{});
+  for (const c of cols) html += `<th>${escapeHtml(c)}</th>`;
+  html += '</tr></thead><tbody>';
+  const maxShow = 200;
+  for (let i=0; i<Math.min(maxShow, data.length); i++){
+    const row = data[i];
+    html += '<tr>';
+    for (const c of cols) html += `<td>${escapeHtml(row[c] ?? row[c.toLowerCase()] ?? '')}</td>`;
+    html += '</tr>';
   }
-  return res;
-}
-
-function escapeHtml(s){
-  return (s||'').toString().replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
-}
-
-function closeModal(){
-  modalBackdrop.style.display = 'none';
-  modalBody.innerHTML = '';
+  html += `</tbody></table></div>`;
+  modalBody.innerHTML = html;
+  modalBackdrop.style.display = 'flex';
 }
 
 function showProblemRows(){
-  const a = window.__csv_analysis;
-  if (!a){ alert('Сначала выполните анализ.'); return; }
-  const data = a.data;
-  const header = a.header;
-  // find rows with any missing required or bad sales or invalid date
+  const last = window.__last_csv;
+  if (!last){ alert('Сначала выполните анализ файла.'); return; }
+  const { data, header, filename } = last;
   const bad = [];
   for (const r of data){
     let isBad = false;
     for (const f of requiredFields){
       const v = r[f] ?? r[f.toLowerCase()] ?? '';
-      if (v === null || v === undefined || v.toString().trim() === '') { isBad = true; break; }
+      if (v === undefined || v === null || v.toString().trim()===''){ isBad = true; break; }
     }
-    // sales non-numeric
-    const raw = (r['sales'] ?? r['Sales'] ?? '').toString();
+    // sales
+    const raw = (r['sales'] ?? '').toString();
     const cleaned = raw.replace(/[^\d\.\-]/g,'').trim();
-    const num = cleaned === '' ? NaN : parseFloat(cleaned);
+    const num = cleaned===''?NaN:parseFloat(cleaned);
     if (isNaN(num)) isBad = true;
-    // invalid date
-    const ds = (r['order_date'] ?? r['Order_Date'] ?? '').toString();
-    if (Date.parse(ds) && !isNaN(Date.parse(ds))){
-      // ok
-    } else {
-      // try alt
+    // date
+    const ds = (r['order_date'] ?? '').toString();
+    if (ds==='') isBad = true;
+    else if (isNaN(Date.parse(ds))){
       const p = ds.replace(/\./g,'/').split('/');
-      if (p.length===3){
-        const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
-        if (isNaN(maybe)) isBad = true;
-      } else {
-        isBad = isBad || ds.trim() === '';
-      }
+      if (!(p.length===3 && !isNaN(new Date(`${p[2]}-${p[1]}-${p[0]}`)))) isBad = true;
     }
     if (isBad) bad.push(r);
-    if (bad.length >= 50) break;
+    if (bad.length >= 500) break;
   }
 
-  // render modal
-  let html = `<div style="overflow:auto;"><table><thead><tr>`;
-  for (const h of (header.length?header:Object.keys(bad[0]||{}))){
-    html += `<th>${escapeHtml(h)}</th>`;
-  }
-  html += `</tr></thead><tbody>`;
-  for (const row of bad.slice(0,200)){
+  modalTitle.textContent = `Проблемные строки — ${filename}`;
+  modalSub.textContent = `Найдено: ${bad.length} (показаны до 500)`;
+  let html = '<div style="overflow:auto;"><table><thead><tr>';
+  const cols = header.length ? header : Object.keys(bad[0]||{});
+  for (const c of cols) html += `<th>${escapeHtml(c)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of bad){
     html += '<tr>';
-    for (const h of (header.length?header:Object.keys(row))){
-      html += `<td>${escapeHtml(row[h] ?? row[h.toLowerCase()] ?? '')}</td>`;
-    }
+    for (const c of cols) html += `<td>${escapeHtml(row[c] ?? row[c.toLowerCase()] ?? '')}</td>`;
     html += '</tr>';
   }
   html += '</tbody></table></div>';
   modalBody.innerHTML = html;
-  modalSub.textContent = `Проблемных строк (показаны первые ${Math.min(50,bad.length)})`;
   modalBackdrop.style.display = 'flex';
 }
+
+function closeModal(){ modalBackdrop.style.display = 'none'; modalBody.innerHTML = ''; }
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ======= Авто запуск при загрузке: собираем и показываем сводку выбранной папки ======= */
+window.addEventListener('load', () => {
+  // краткая автоматизация: сразу собираем сводку для выбранной папки
+  renderFolderSummary(folderSelect.value).catch(e => setNotes('Ошибка при инициализации: ' + e.message));
+});
 </script>
 </body>
 </html>

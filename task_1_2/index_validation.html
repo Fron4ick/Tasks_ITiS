@@ -3,11 +3,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>CSV Validator — Автоматический поиск в test-data1 / test-data2</title>
-
-<!-- PapaParse для простого и надёжного парсинга CSV -->
+<title>CSV Validator — Автоматический поиск и анализ</title>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
 <style>
   :root{ --bg:#08121a; --muted:#9db1c7; --accent:#4aa3ff; --panel:#0b1620; color:#eaf4ff; font-family:Inter,system-ui,Arial; }
   body{ margin:0; background:linear-gradient(180deg,#051018,#08121a); min-height:100vh; color:var(--muted); }
@@ -25,6 +22,7 @@
   .modal-backdrop{ position:fixed; inset:0; display:none; background:rgba(2,6,20,0.75); align-items:center; justify-content:center; z-index:9999; padding:20px;}
   .modal{ width:100%; max-width:1100px; height:80vh; background:var(--panel); border-radius:10px; padding:12px; overflow:auto; border:1px solid rgba(255,255,255,0.03); color:var(--muted); }
   .small{ font-size:12px; color:var(--muted); }
+  .download-btn{ margin-top:8px; }
 </style>
 </head>
 <body>
@@ -37,7 +35,6 @@
       <div class="small">Открывайте страницу через локальный HTTP-сервер (например <span class="mono">python -m http.server</span>).</div>
     </header>
 
-    <!-- ЛЕВЫЙ: управление -->
     <aside class="panel">
       <div style="margin-bottom:8px;"><strong class="mono">Выбор папки</strong></div>
       <div style="display:flex; gap:8px; margin-bottom:10px;">
@@ -62,7 +59,6 @@
       <div style="margin-top:12px;" class="small">Если хотите, положите в папку файл <span class="mono">manifest.json</span> со списком имён (JSON-массив). Тогда страница автоматически использует его.</div>
     </aside>
 
-    <!-- ПРАВЫЙ: вывод сводки и результатов -->
     <main class="panel" id="mainPanel">
       <div id="folderSummary" style="margin-bottom:12px;"></div>
       <div id="analysisArea"></div>
@@ -70,7 +66,6 @@
     </main>
   </div>
 
-  <!-- Модал для просмотра таблицы -->
   <div class="modal-backdrop" id="modalBackdrop">
     <div class="modal">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -82,20 +77,12 @@
   </div>
 
 <script>
-/* =========== Настройки и вспомогательные данные =========== */
 const requiredFields = ['name','segment','state','city','order_date','ship_mode','sales'];
-
-// Если manifest отсутствует — проверяем эти типичные имена файлов (настраивайте)
 const candidateFiles = [
-  'orders_invalid_fields3.csv',
-  'orders_missing_values.csv',
-  'orders_invalid_dates.csv',
-  'orders_empty.csv',
-  'orders_no_entries.csv',
-  'orders.csv'
+  'orders_invalid_fields3.csv','orders_missing_values.csv','orders_invalid_dates.csv',
+  'orders_empty.csv','orders_no_entries.csv','orders.csv'
 ];
 
-/* ======== Элементы DOM ======== */
 const folderSelect = document.getElementById('folderSelect');
 const refreshBtn = document.getElementById('refreshBtn');
 const folderSummary = document.getElementById('folderSummary');
@@ -111,133 +98,75 @@ const modalTitle = document.getElementById('modalTitle');
 const modalSub = document.getElementById('modalSub');
 document.getElementById('modalClose').addEventListener('click', closeModal);
 
-/* ======= Функции для проверки существования файлов (robust для локального сервера) ======= */
+function setNotes(text){ notesEl.style.display='block'; notesEl.textContent = text; }
+
 async function probeFile(url){
-  // Попытка: сначала GET с Range, если не сработает, пробуем обычный GET.
   try {
-    // Range может не поддерживаться сервером — не критично
     const r = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-2047' }});
-    if (r.ok){
-      const text = await r.text();
-      return { exists: true, size: r.headers.get('content-length') || text.length, sample: text.slice(0, 2048) };
-    }
-  } catch(e){
-    // fallback
-  }
-  try {
-    const r2 = await fetch(url, { method: 'GET' });
-    if (r2.ok) {
-      const text = await r2.text();
-      return { exists: true, size: r2.headers.get('content-length') || text.length, sample: text.slice(0,2048) };
-    }
+    if (r.ok){ const text = await r.text(); return { exists:true, size: r.headers.get('content-length') || text.length, sample: text.slice(0,2048) }; }
   } catch(e){}
-  return { exists: false };
+  try { const r2 = await fetch(url); if (r2.ok){ const t=await r2.text(); return { exists:true, size: r2.headers.get('content-length') || t.length, sample: t.slice(0,2048) }; } } catch(e){}
+  return { exists:false };
 }
 
-/* ======= Попытка получить manifest.json — если есть, используем его ======= */
 async function getManifest(folder){
   const path = `${folder}/manifest.json`;
-  try {
-    const r = await fetch(path);
-    if (!r.ok) return null;
-    const arr = await r.json();
-    if (Array.isArray(arr)) return arr.map(String);
-    return null;
-  } catch(e){ return null; }
+  try { const r = await fetch(path); if (!r.ok) return null; const arr = await r.json(); if (Array.isArray(arr)) return arr.map(String); } catch(e){} return null;
 }
 
-/* ======= Составляем список файлов для папки (автоматически) ======= */
 async function buildFileListForFolder(folder){
   setNotes(`Сбор списка файлов в ${folder}...`);
-  // 1) попытка manifest.json
   const manifest = await getManifest(folder);
-  if (manifest && manifest.length) {
-    setNotes(`Использую manifest.json (${folder}/manifest.json).`);
-    return manifest;
-  }
-  // 2) probe candidateFiles параллельно
+  if (manifest && manifest.length){ setNotes(`Использую manifest.json (${folder}/manifest.json).`); return manifest; }
   const tries = candidateFiles.map(name => {
     const path = `${folder}/${name}`;
     return probeFile(path).then(res => ({ name, path, found: res.exists, size: res.size, sample: res.sample }));
   });
   const results = await Promise.all(tries);
   const found = results.filter(r=>r.found);
-  if (found.length) {
-    setNotes(`Найдено ${found.length} известных файлов в ${folder}.`);
-    return found.map(f => f.name);
-  }
-  setNotes(`Не найдено известных файлов в ${folder}. Можно добавить имена в candidateFiles или создать manifest.json.`);
+  if (found.length){ setNotes(`Найдено ${found.length} файлов в ${folder}.`); return found.map(f=>f.name); }
+  setNotes(`Не найдено известных файлов в ${folder}.`);
   return [];
 }
 
-/* ======= Отрисовка короткой сводки папки ======= */
 async function renderFolderSummary(folder){
   folderSummary.innerHTML = `<div class="small">Сбор информации по папке <span class="mono">${folder}</span>…</div>`;
   const files = await buildFileListForFolder(folder);
-  if (!files.length){
-    folderSummary.innerHTML += `<div class="small">Файлы не найдены.</div>`;
-    return;
-  }
-  // Для каждого файла пробуем probeFile и отрисуем информацию (параллельно)
+  if (!files.length){ folderSummary.innerHTML += `<div class="small">Файлы не найдены.</div>`; return; }
   const probes = files.map(name => probeFile(`${folder}/${name}`).then(res => ({ name, path:`${folder}/${name}`, res })));
   const results = await Promise.all(probes);
-
   let html = '<div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">';
   for (const r of results){
     if (!r.res.exists) {
       html += `<div class="file-item"><div class="mono">${r.name}</div><div class="small status-err">не доступен</div></div>`;
     } else {
       html += `<div class="file-item">
-                <div>
-                  <div class="mono">${r.name}</div>
-                  <div class="small muted">путь: <span class="mono">${r.path}</span></div>
-                </div>
+                <div><div class="mono">${r.name}</div><div class="small muted">путь: <span class="mono">${r.path}</span></div></div>
                 <div style="text-align:right">
                   <div class="small">size: ${r.res.size ?? '—'} B</div>
                   <div style="margin-top:6px">
                     <button class="btn" onclick="fetchAndAnalyze('${r.path}')">Анализ</button>
                     <button class="btn" onclick="fetchAndShow('${r.path}')">Просмотр</button>
                   </div>
-                </div>
-               </div>`;
+                </div></div>`;
     }
   }
-  html += '</div>';
-  folderSummary.innerHTML = html;
+  html += '</div>'; folderSummary.innerHTML = html;
 }
 
-/* ======= Анализ одного файла (с использованием PapaParse) ======= */
-function parseAndAnalyze(csvText, filename){
-  Papa.parse(csvText, {
-    header:true, skipEmptyLines:true,
-    complete: function(results){ runChecks(results.data, filename, results.meta); },
-    error: function(err){ setNotes('Ошибка парсинга: ' + err.message); }
-  });
-}
+/* ======= Основная логика парсинга / анализа ======= */
+function parseAndAnalyze(csvText, filename){ Papa.parse(csvText, { header:true, skipEmptyLines:true, complete: r => runChecks(r.data, filename, r.meta), error: e => setNotes('Ошибка парсинга: '+e.message) }); }
 
 async function fetchAndAnalyze(path){
-  try {
-    const r = await fetch(path);
-    if (!r.ok) throw new Error('Не удалось загрузить ' + path);
-    const txt = await r.text();
-    parseAndAnalyze(txt, path);
-  } catch(e){
-    alert('Ошибка: ' + e.message + '. Запустите локальный сервер и убедитесь, что путь корректен.');
-  }
+  try { const r = await fetch(path); if (!r.ok) throw new Error('Не удалось загрузить '+path); const txt = await r.text(); parseAndAnalyze(txt, path); }
+  catch(e){ alert('Ошибка: '+e.message + '. Запустите локальный сервер.'); }
 }
 
 async function fetchAndShow(path){
-  try {
-    const r = await fetch(path);
-    if (!r.ok) throw new Error('Не удалось загрузить ' + path);
-    const txt = await r.text();
-    showTableModal(txt, path);
-  } catch(e){
-    alert('Ошибка: ' + e.message);
-  }
+  try { const r = await fetch(path); if (!r.ok) throw new Error('Не удалось загрузить '+path); const txt = await r.text(); showTableModal(txt, path); }
+  catch(e){ alert('Ошибка: '+e.message); }
 }
 
-/* ======= Массовый анализ всех файлов папки ======= */
 async function analyzeAllInFolder(folder){
   setNotes('Анализ всех файлов в папке: ' + folder);
   const fileNames = await buildFileListForFolder(folder);
@@ -246,55 +175,86 @@ async function analyzeAllInFolder(folder){
   const tasks = fileNames.map(async name => {
     const path = `${folder}/${name}`;
     try {
-      const r = await fetch(path);
-      if (!r.ok) return { name, path, error: 'Не удалось загрузить' };
+      const r = await fetch(path); if (!r.ok) return { name, path, error:'Не удалось загрузить' };
       const txt = await r.text();
-      // парсим кратко и собираем сводку (без вывода всех данных)
       const parsed = Papa.parse(txt, { header:true, skipEmptyLines:true });
       const nRows = parsed.data.length;
       const header = parsed.meta && parsed.meta.fields ? parsed.meta.fields : (nRows>0?Object.keys(parsed.data[0]):[]);
-      // подсчёт основных проблем (лишь счётчики)
       const headerNorm = header.map(h=>h.toLowerCase());
       const missingFields = requiredFields.filter(f=>!headerNorm.includes(f));
-      // пропуски
       const rowsWithMissing = {};
       for (const f of requiredFields){
         if (headerNorm.includes(f)){
-          let cnt = 0;
-          for (const row of parsed.data){ if (!row[f] || row[f].toString().trim()==='') cnt++; }
-          rowsWithMissing[f] = cnt;
-        } else rowsWithMissing[f] = null;
+          let cnt=0; for (const row of parsed.data){ if (!row[f] || row[f].toString().trim()==='') cnt++; } rowsWithMissing[f]=cnt;
+        } else rowsWithMissing[f]=null;
       }
       return { name, path, nRows, header, missingFields, rowsWithMissing };
-    } catch(e){
-      return { name, path, error: e.message };
-    }
+    } catch(e){ return { name, path, error:e.message }; }
   });
-
   const results = await Promise.all(tasks);
-  // отрисуем компактную сводку
   let html = '<div><strong class="mono">Результаты массового анализа</strong></div><table><thead><tr><th>файл</th><th>строк</th><th>отсутствуют поля</th><th>пропуски (по полям)</th><th>действие</th></tr></thead><tbody>';
   for (const r of results){
-    if (r.error) {
-      html += `<tr><td class="mono">${r.name}</td><td colspan="3" class="small status-err">${r.error}</td><td><button class="btn" onclick="fetchAndAnalyze('${r.path}')">Повтор</button></td></tr>`;
-    } else {
-      const miss = r.missingFields.length ? r.missingFields.join(', ') : '<span class="status-ok">нет</span>';
+    if (r.error) html += `<tr><td class="mono">${r.name}</td><td colspan="3" class="small status-err">${r.error}</td><td><button class="btn" onclick="fetchAndAnalyze('${r.path}')">Повтор</button></td></tr>`;
+    else {
+      const miss = r.missingFields.length? r.missingFields.join(', '): '<span class="status-ok">нет</span>';
       const pm = requiredFields.map(f => (r.rowsWithMissing && r.rowsWithMissing[f] !== null ? `${f}:${r.rowsWithMissing[f]}` : `${f}:—`)).join('; ');
-      html += `<tr>
-                <td class="mono">${r.name}</td>
-                <td>${r.nRows}</td>
-                <td class="small">${miss}</td>
-                <td class="small mono">${pm}</td>
-                <td><button class="btn" onclick="fetchAndAnalyze('${r.path}')">Анализ</button></td>
-               </tr>`;
+      html += `<tr><td class="mono">${r.name}</td><td>${r.nRows}</td><td class="small">${miss}</td><td class="small mono">${pm}</td><td><button class="btn" onclick="fetchAndAnalyze('${r.path}')">Анализ</button></td></tr>`;
     }
   }
-  html += '</tbody></table>';
-  analysisArea.innerHTML = html;
-  setNotes('Массовый анализ завершён.');
+  html += '</tbody></table>'; analysisArea.innerHTML = html; setNotes('Массовый анализ завершён.');
 }
 
-/* ======= Реализация детального анализа (runChecks) ======= */
+/* ======= Валидация строки ======= */
+function getFieldVal(row, field){
+  // стараемся читать без учёта регистра: exact -> lowercased key
+  if (row.hasOwnProperty(field)) return row[field];
+  const lower = field.toLowerCase();
+  for (const k of Object.keys(row)){
+    if (k.toLowerCase() === lower) return row[k];
+  }
+  return undefined;
+}
+
+function isDateValid(s){
+  if (!s) return false;
+  s = s.toString().trim();
+  const p1 = Date.parse(s);
+  if (!isNaN(p1)) return true;
+  // попробовать dd.mm.yyyy или dd/mm/yyyy
+  const p = s.replace(/\./g,'/').split('/');
+  if (p.length===3){
+    const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
+    return !isNaN(maybe);
+  }
+  return false;
+}
+
+function isSalesValid(s){
+  if (s===undefined || s===null) return false;
+  const cleaned = s.toString().replace(/[^\d\.\-]/g,'').trim();
+  if (cleaned==='') return false;
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return false;
+  if (num < 0) return false; // считаем отрицательные sales — ошибкой
+  return true;
+}
+
+function isRowValid(row, headerNorm){
+  // все обязательные поля присутствуют (в заголовке) и непустые, дата валидна, sales валидно
+  for (const f of requiredFields){
+    // если поле вообще отсутствует в headerNorm — строка невалидна
+    if (!headerNorm.includes(f)) return false;
+    const val = getFieldVal(row, f);
+    if (val===undefined || val===null || val.toString().trim()==='') return false;
+  }
+  // order_date
+  if (!isDateValid(getFieldVal(row,'order_date'))) return false;
+  // sales
+  if (!isSalesValid(getFieldVal(row,'sales'))) return false;
+  return true;
+}
+
+/* ======= Детальный анализ с выводом ВЕРНЫХ строк ======= */
 function runChecks(data, filename, meta){
   const nRows = data.length;
   const header = meta && meta.fields ? meta.fields.map(h=>h.toString().trim()) : (nRows>0?Object.keys(data[0]):[]);
@@ -306,7 +266,7 @@ function runChecks(data, filename, meta){
     <div><button class="btn" onclick="showRawModal()">Просмотреть таблицу</button></div>
   </div></div>`;
 
-  // structure check
+  // structure
   const missing = requiredFields.filter(f=>!headerNorm.includes(f));
   const extra = header.filter(h=>!requiredFields.includes(h.toLowerCase()));
   html += `<div class="panel" style="margin-top:10px;"><h3>Проверка структуры</h3><div class="small mono">Заголовки: ${header.join(', ')}</div>`;
@@ -316,89 +276,75 @@ function runChecks(data, filename, meta){
   if (extra.length) html += `<div class="small">Доп. поля: ${extra.join(', ')}</div>`;
   html += `</div>`;
 
-  // data quality
-  // пропуски
+  // data quality + разделение на валидные/невалидные
   const rowsWithMissing = {};
   for (const f of requiredFields){
     if (headerNorm.includes(f)){
       let cnt = 0;
-      for (const r of data){ const v = r[f]; if (v===undefined || v===null || v.toString().trim()==='') cnt++; }
+      for (const r of data){ const v = getFieldVal(r,f); if (v===undefined || v===null || v.toString().trim()==='') cnt++; }
       rowsWithMissing[f] = cnt;
     } else rowsWithMissing[f] = null;
   }
-  // dates
+
   let invalidDates = null;
   if (headerNorm.includes('order_date')){
     invalidDates = 0;
-    for (const r of data){
-      const s = (r['order_date'] ?? '').toString().trim();
-      if (!s) { invalidDates++; continue; }
-      const parsed = Date.parse(s);
-      if (isNaN(parsed)){
-        // попытка dd.mm.yyyy или dd/mm/yyyy
-        const p = s.replace(/\./g,'/').split('/');
-        if (p.length===3){
-          const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
-          if (isNaN(maybe)) invalidDates++; 
-        } else invalidDates++;
-      }
-    }
+    for (const r of data){ if (!isDateValid(getFieldVal(r,'order_date'))) invalidDates++; }
   }
 
-  // sales checks
   let salesReport = { non_numeric:null, negative:null, outliers:null, outlier_threshold:null };
   if (headerNorm.includes('sales')){
     const values = data.map(r => {
-      const raw = (r['sales'] ?? '').toString();
-      const cleaned = raw.replace(/[^\d\.\-]/g,'').trim();
-      return cleaned==='' ? NaN : parseFloat(cleaned);
+      const raw = getFieldVal(r,'sales');
+      const cleaned = (raw===undefined||raw===null)?'':raw.toString().replace(/[^\d\.\-]/g,'').trim();
+      return cleaned===''?NaN:parseFloat(cleaned);
     });
     const numeric = values.filter(v=>!isNaN(v));
     const nonNumeric = values.length - numeric.length;
     const negative = numeric.filter(v=>v<0).length;
-    let outlierThresh = null, outliers = 0;
+    let outlierThresh=null, outliers=0;
     if (numeric.length>1){
       const mean = numeric.reduce((a,b)=>a+b,0)/numeric.length;
       const std = Math.sqrt(numeric.map(x=>Math.pow(x-mean,2)).reduce((a,b)=>a+b,0)/(numeric.length-1));
-      outlierThresh = mean + 3*std;
-      outliers = numeric.filter(v=>v>outlierThresh).length;
+      outlierThresh = mean + 3*std; outliers = numeric.filter(v=>v>outlierThresh).length;
     }
     salesReport = { non_numeric: nonNumeric, negative, outliers, outlier_threshold: outlierThresh };
   }
 
+  // разделение
+  const validRows = [];
+  const badRows = [];
+  for (const r of data){
+    if (isRowValid(r, headerNorm)) validRows.push(r); else badRows.push(r);
+  }
+
   html += `<div class="panel" style="margin-top:10px;"><h3>Проблемы в данных</h3>
            <div class="small">Пропуски:</div><table><thead><tr><th>поле</th><th>пропусков</th></tr></thead><tbody>`;
-  for (const f of requiredFields){
-    html += `<tr><td class="mono">${f}</td><td>${rowsWithMissing[f]===null?'<em>нет поля</em>':rowsWithMissing[f]}</td></tr>`;
-  }
+  for (const f of requiredFields){ html += `<tr><td class="mono">${f}</td><td>${rowsWithMissing[f]===null?'<em>нет поля</em>':rowsWithMissing[f]}</td></tr>`; }
   html += `</tbody></table>`;
   html += `<div style="margin-top:8px;">${ invalidDates!==null ? `<div class="${invalidDates>0?'status-warn':'status-ok'}">Некорректных дат: ${invalidDates}</div>` : '<div class="small">Колонка order_date отсутствует</div>'}</div>`;
   if (salesReport.non_numeric!==null){
     html += `<div style="margin-top:8px;" class="small">Sales: non-numeric=${salesReport.non_numeric}, negative=${salesReport.negative}, outliers=${salesReport.outliers}${salesReport.outlier_threshold?(' (порог '+Math.round(salesReport.outlier_threshold)+')'):''}</div>`;
   } else html += `<div class="small">Колонка sales отсутствует</div>`;
-  html += `<div style="margin-top:8px;" class="small">Рекомендации: удалить/заполнить пропуски, привести даты к YYYY-MM-DD, очистить sales от символов валюты.</div>`;
+  html += `<div style="margin-top:8px;" class="small">Рекомендации: удалить/заполнить пропуски; привести даты к YYYY-MM-DD; очистить sales от символов валюты и отрицательных значений.</div>`;
   html += `<div style="margin-top:8px;"><button class="btn" onclick="showProblemRows()">Показать проблемные строки</button></div>`;
   html += `</div>`;
 
+  // вставляем блок с ВЕРНЫМИ строками
+  html += `<div class="panel" style="margin-top:12px;"><h3>Верные строки (валидные)</h3><div class="small">Найдено: <strong>${validRows.length}</strong> из ${nRows}</div>`;
+  if (validRows.length > 0){
+    html += `<div style="margin-top:8px;"><button class="btn download-btn" onclick="downloadValidCSV()">Скачать валидные CSV</button> <button class="btn" onclick="renderValidTable()">Показать таблицу</button></div>`;
+  } else {
+    html += `<div class="small status-warn" style="margin-top:8px;">Валидных строк не найдено.</div>`;
+  }
+  html += `</div>`;
+
   analysisArea.innerHTML = html;
-  // сохраним для модалей
-  window.__last_csv = { data, header, filename };
+  // сохраним для модалей / экспорта
+  window.__last_csv = { data, header, filename, validRows, badRows };
 }
 
-/* ======= UI: локальный файл и кнопки ======= */
-analyzeLocalBtn.addEventListener('click', () => {
-  if (fileInput.files.length===0){ alert('Выберите CSV файл через поле'); return; }
-  const f = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = e => parseAndAnalyze(e.target.result, f.name);
-  reader.readAsText(f, 'utf-8');
-});
-
-refreshBtn.addEventListener('click', () => renderFolderSummary(folderSelect.value));
-analyzeAllBtn.addEventListener('click', () => analyzeAllInFolder(folderSelect.value));
-tryOrdersBtn.addEventListener('click', () => fetchAndAnalyze(`test-data1/orders_invalid_fields3.csv`));
-
-/* ======= Модальные функции и просмотр ======= */
+/* ======= Просмотр и экспорт ======= */
 function showRawModal(){
   const last = window.__last_csv;
   if (!last){ alert('Сначала выполните анализ файла.'); return; }
@@ -411,67 +357,78 @@ function showRawModal(){
   html += '</tr></thead><tbody>';
   const maxShow = 200;
   for (let i=0; i<Math.min(maxShow, data.length); i++){
-    const row = data[i];
-    html += '<tr>';
-    for (const c of cols) html += `<td>${escapeHtml(row[c] ?? row[c.toLowerCase()] ?? '')}</td>`;
+    const row = data[i]; html += '<tr>';
+    for (const c of cols) html += `<td>${escapeHtml(getFieldVal(row,c) ?? '')}</td>`;
     html += '</tr>';
   }
   html += `</tbody></table></div>`;
-  modalBody.innerHTML = html;
-  modalBackdrop.style.display = 'flex';
+  modalBody.innerHTML = html; modalBackdrop.style.display = 'flex';
+}
+
+function renderValidTable(){
+  const last = window.__last_csv; if (!last){ alert('Сначала выполните анализ'); return; }
+  const { validRows, header } = last;
+  if (!validRows || !validRows.length){ alert('Нет валидных строк'); return; }
+  const cols = header.length ? header : Object.keys(validRows[0]||{});
+  let html = '<div style="overflow:auto;"><table><thead><tr>';
+  for (const c of cols) html += `<th>${escapeHtml(c)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of validRows){
+    html += '<tr>'; for (const c of cols) html += `<td>${escapeHtml(getFieldVal(row,c)??'')}</td>`; html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  modalTitle.textContent = 'Валидные строки'; modalSub.textContent = `Найдено: ${validRows.length}`;
+  modalBody.innerHTML = html; modalBackdrop.style.display = 'flex';
 }
 
 function showProblemRows(){
-  const last = window.__last_csv;
-  if (!last){ alert('Сначала выполните анализ файла.'); return; }
-  const { data, header, filename } = last;
-  const bad = [];
-  for (const r of data){
-    let isBad = false;
-    for (const f of requiredFields){
-      const v = r[f] ?? r[f.toLowerCase()] ?? '';
-      if (v === undefined || v === null || v.toString().trim()===''){ isBad = true; break; }
-    }
-    // sales
-    const raw = (r['sales'] ?? '').toString();
-    const cleaned = raw.replace(/[^\d\.\-]/g,'').trim();
-    const num = cleaned===''?NaN:parseFloat(cleaned);
-    if (isNaN(num)) isBad = true;
-    // date
-    const ds = (r['order_date'] ?? '').toString();
-    if (ds==='') isBad = true;
-    else if (isNaN(Date.parse(ds))){
-      const p = ds.replace(/\./g,'/').split('/');
-      if (!(p.length===3 && !isNaN(new Date(`${p[2]}-${p[1]}-${p[0]}`)))) isBad = true;
-    }
-    if (isBad) bad.push(r);
-    if (bad.length >= 500) break;
-  }
-
-  modalTitle.textContent = `Проблемные строки — ${filename}`;
-  modalSub.textContent = `Найдено: ${bad.length} (показаны до 500)`;
+  const last = window.__last_csv; if (!last){ alert('Сначала выполните анализ'); return; }
+  const bad = last.badRows || [];
+  modalTitle.textContent = `Проблемные строки — ${last.filename}`; modalSub.textContent = `Найдено: ${bad.length}`;
+  if (!bad.length){ modalBody.innerHTML = '<div class="small">Проблемных строк не найдено.</div>'; modalBackdrop.style.display='flex'; return; }
+  const cols = last.header.length ? last.header : Object.keys(bad[0]||{});
   let html = '<div style="overflow:auto;"><table><thead><tr>';
-  const cols = header.length ? header : Object.keys(bad[0]||{});
   for (const c of cols) html += `<th>${escapeHtml(c)}</th>`;
   html += '</tr></thead><tbody>';
   for (const row of bad){
-    html += '<tr>';
-    for (const c of cols) html += `<td>${escapeHtml(row[c] ?? row[c.toLowerCase()] ?? '')}</td>`;
-    html += '</tr>';
+    html += '<tr>'; for (const c of cols) html += `<td>${escapeHtml(getFieldVal(row,c)??'')}</td>`; html += '</tr>';
   }
-  html += '</tbody></table></div>';
-  modalBody.innerHTML = html;
-  modalBackdrop.style.display = 'flex';
+  html += '</tbody></table></div>'; modalBody.innerHTML = html; modalBackdrop.style.display='flex';
 }
 
-function closeModal(){ modalBackdrop.style.display = 'none'; modalBody.innerHTML = ''; }
-function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function downloadValidCSV(){
+  const last = window.__last_csv; if (!last || !last.validRows) { alert('Нет валидных строк'); return; }
+  const rows = last.validRows;
+  const header = last.header.length ? last.header : Object.keys(rows[0]||{});
+  const lines = [header.join(',')];
+  for (const r of rows){
+    const vals = header.map(h => {
+      const v = getFieldVal(r,h); if (v===undefined||v===null) return '';
+      const s = String(v).replace(/"/g,'""'); return (s.includes(',')||s.includes('"')||s.includes('\n'))?`"${s}"`:s;
+    });
+    lines.push(vals.join(','));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = (last.filename ? last.filename.replace(/\.[^/.]+$/, '') : 'valid') + '_valid.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
 
-/* ======= Авто запуск при загрузке: собираем и показываем сводку выбранной папки ======= */
-window.addEventListener('load', () => {
-  // краткая автоматизация: сразу собираем сводку для выбранной папки
-  renderFolderSummary(folderSelect.value).catch(e => setNotes('Ошибка при инициализации: ' + e.message));
+function closeModal(){ modalBackdrop.style.display='none'; modalBody.innerHTML=''; }
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* UI bindings */
+analyzeLocalBtn.addEventListener('click', () => {
+  if (!fileInput.files.length){ alert('Выберите CSV файл'); return; }
+  const f = fileInput.files[0]; const reader = new FileReader();
+  reader.onload = e => parseAndAnalyze(e.target.result, f.name); reader.readAsText(f,'utf-8');
 });
+refreshBtn.addEventListener('click', () => renderFolderSummary(folderSelect.value));
+analyzeAllBtn.addEventListener('click', () => analyzeAllInFolder(folderSelect.value));
+tryOrdersBtn.addEventListener('click', () => fetchAndAnalyze(`${folderSelect.value}/orders_invalid_fields3.csv`));
+
+/* Авто запуск: показать сводку папки */
+window.addEventListener('load', () => { renderFolderSummary(folderSelect.value).catch(e=>setNotes('Ошибка: '+e.message)); });
 </script>
 </body>
 </html>

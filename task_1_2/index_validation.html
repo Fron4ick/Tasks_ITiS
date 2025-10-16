@@ -128,8 +128,17 @@
       .download-btn {
         margin-top: 8px;
       }
-      #folderSelect {
-        color: #071024;
+      .stats-row {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .stat-card {
+        background: rgba(255, 255, 255, 0.01);
+        padding: 8px 10px;
+        border-radius: 8px;
+        min-width: 180px;
       }
     </style>
   </head>
@@ -286,6 +295,19 @@
               }[m])
           );
       }
+      function formatMoney(n) {
+        if (!isFinite(n)) return "$0.00";
+        return (
+          "$" +
+          Number(n).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        );
+      }
+      function formatPercent(n) {
+        return Number(n).toFixed(2) + "%";
+      }
 
       /* ====== Проверка доступности файла (fetch Range -> fallback GET) ====== */
       async function probeFile(url) {
@@ -328,7 +350,6 @@
         } catch (e) {}
         return null;
       }
-
       function getCandidateFilesForFolder(folder) {
         return folder === "test-data1"
           ? candidateFiles1.slice()
@@ -538,6 +559,18 @@
         }
         return false;
       }
+      function parseDateYear(s) {
+        if (!s) return null;
+        s = s.toString().trim();
+        const dt = Date.parse(s);
+        if (!isNaN(dt)) return new Date(dt).getFullYear();
+        const p = s.replace(/\./g, "/").split("/");
+        if (p.length === 3) {
+          const maybe = new Date(`${p[2]}-${p[1]}-${p[0]}`);
+          if (!isNaN(maybe)) return maybe.getFullYear();
+        }
+        return null;
+      }
       function isSalesValid(s) {
         if (s === undefined || s === null) return false;
         const cleaned = s
@@ -549,6 +582,14 @@
         if (isNaN(num)) return false;
         if (num < 0) return false;
         return true;
+      }
+      function parseSales(s) {
+        if (s === undefined || s === null) return NaN;
+        const cleaned = s
+          .toString()
+          .replace(/[^\d\.\-]/g, "")
+          .trim();
+        return cleaned === "" ? NaN : parseFloat(cleaned);
       }
       function isRowValid(row, headerNorm) {
         for (const f of requiredFields) {
@@ -562,7 +603,7 @@
         return true;
       }
 
-      /* ====== Детальный анализ и вывод валидных строк ====== */
+      /* ====== Детальный анализ и вывод валидных строк + статистика Top-10 штатов ====== */
       function runChecks(data, filename, meta) {
         const nRows = data.length;
         const header =
@@ -702,21 +743,91 @@
         html += `<div style="margin-top:8px;"><button class="btn" onclick="showProblemRows()">Показать проблемные строки</button></div>`;
         html += `</div>`;
 
-        // блок ВЕРНЫХ строк
-        html += `<div class="panel" style="margin-top:12px;"><h3>Верные строки (валидные)</h3><div class="small">Найдено: <strong>${validRows.length}</strong> из ${nRows}</div>`;
+        // ---------- статистика Top-10 по штатам (только из validRows) ----------
+        let top10Html = "";
         if (validRows.length > 0) {
-          html += `<div style="margin-top:8px;"><button class="btn download-btn" onclick="downloadValidCSV()">Скачать валидные CSV</button> <button class="btn" onclick="renderValidTable()">Показать таблицу</button></div>`;
+          // агрегируем по состоянию
+          const sumsByState = {};
+          let totalSum = 0;
+          const yearSums = {}; // year -> sum
+          for (const r of validRows) {
+            const state = (getFieldVal(r, "state") ?? "").toString().trim();
+            const s = parseSales(getFieldVal(r, "sales"));
+            if (!isNaN(s)) {
+              totalSum += s;
+              sumsByState[state] = (sumsByState[state] || 0) + s;
+              const y = parseDateYear(getFieldVal(r, "order_date"));
+              if (y) yearSums[y] = (yearSums[y] || 0) + s;
+            }
+          }
+          // топ-10
+          const entries = Object.keys(sumsByState).map((k) => ({
+            state: k,
+            sum: sumsByState[k],
+          }));
+          entries.sort((a, b) => b.sum - a.sum);
+          const top10 = entries.slice(0, 10);
+          const top10Sum = top10.reduce((a, b) => a + (b.sum || 0), 0);
+          const pct = totalSum > 0 ? (top10Sum / totalSum) * 100 : 0;
+
+          // выбираем год для "Общая выручка за год"
+          let chosenYearLabel = "";
+          if (Object.keys(yearSums).length === 1) {
+            const y = Object.keys(yearSums)[0];
+            chosenYearLabel = `за ${y}`;
+          } else if (Object.keys(yearSums).length > 1) {
+            // выберем год с наибольшей выручкой
+            const best = Object.entries(yearSums).sort(
+              (a, b) => b[1] - a[1]
+            )[0];
+            chosenYearLabel = `за ${best[0]}`;
+          } else {
+            chosenYearLabel = "(в файле)";
+          }
+
+          // отрисовка блока Top-10
+          top10Html += `<div class="panel" style="margin-top:12px;"><h3>Верные строки (валидные)</h3>`;
+          top10Html += `<div class="small">Найдено: <strong>${validRows.length}</strong> из ${nRows}</div>`;
+
+          top10Html += `<div class="stats-row">`;
+          top10Html += `<div class="stat-card"><div class="small">Показано Top 10 штатов</div><div style="font-weight:700; margin-top:6px;">Top-10</div></div>`;
+          top10Html += `<div class="stat-card"><div class="small">Источник</div><div style="font-weight:700; margin-top:6px;">${escapeHtml(
+            filename.replace(/^.*[\\/]/, "")
+          )}</div></div>`;
+          top10Html += `<div class="stat-card"><div class="small">Сумма выручки Top-10</div><div style="font-weight:700; margin-top:6px;">${formatMoney(
+            top10Sum
+          )}</div></div>`;
+          top10Html += `<div class="stat-card"><div class="small">Доля Top-10 от общей выручки</div><div style="font-weight:700; margin-top:6px;">${formatPercent(
+            pct
+          )}</div></div>`;
+          top10Html += `<div class="stat-card"><div class="small">Общая выручка ${chosenYearLabel}</div><div style="font-weight:700; margin-top:6px;">${formatMoney(
+            totalSum
+          )}</div></div>`;
+          top10Html += `</div>`;
+
+          // таблица Top-10 (из данных файла)
+          top10Html += `<div style="margin-top:10px;" class="small"><table><thead><tr><th>Место</th><th>Штат</th><th>Сумма</th></tr></thead><tbody>`;
+          for (let i = 0; i < top10.length; i++) {
+            const it = top10[i];
+            top10Html += `<tr><td>${i + 1}</td><td class="mono">${escapeHtml(
+              it.state || "(пусто)"
+            )}</td><td>${formatMoney(it.sum)}</td></tr>`;
+          }
+          top10Html += `</tbody></table></div>`;
+
+          top10Html += `<div style="margin-top:8px;"><button class="btn download-btn" onclick="downloadValidCSV()">Скачать валидные CSV</button> <button class="btn" onclick="renderValidTable()">Показать таблицу</button></div>`;
+          top10Html += `</div>`;
         } else {
-          html += `<div class="small status-warn" style="margin-top:8px;">Валидных строк не найдено.</div>`;
+          top10Html += `<div class="panel" style="margin-top:12px;"><h3>Верные строки (валидные)</h3><div class="small status-warn" style="margin-top:8px;">Валидных строк не найдено.</div></div>`;
         }
-        html += `</div>`;
+
+        html += top10Html;
 
         analysisArea.innerHTML = html;
         window.__last_csv = { data, header, filename, validRows, badRows };
       }
 
-      /* ====== Просмотр таблицы (исправлено) ====== */
-      /* showTableModal: принимает сырой текст CSV и путь, парсит и показывает таблицу в модале */
+      /* ====== Просмотр таблицы (парсинг) ====== */
       function showTableModal(csvText, path) {
         try {
           const parsed = Papa.parse(csvText, {

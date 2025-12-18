@@ -727,6 +727,12 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                // Добавляем отступ сверху, чтобы цифры не обрезались
+                layout: {
+                    padding: {
+                        top: 20
+                    }
+                },
                 scales: {
                     x: {
                         ticks: { color: textColor },
@@ -746,10 +752,22 @@
                         labels: { color: textColor }
                     },
                     datalabels: {
-                        display: false
+                        display: true,
+                        anchor: 'end',
+                        align: 'top',
+                        color: textColor,
+                        offset: 2, // Небольшой отступ от края столбца
+                        font: {
+                            size: 11,
+                            weight: 'bold'
+                        },
+                        formatter: function(value) {
+                            return value > 0 ? '$' + Math.round(value).toLocaleString() : '';
+                        }
                     }
                 }
-            }
+            },
+            plugins: [ChartDataLabels] // Убедитесь, что плагин передан в массив плагинов
         });
     }
 </script>
